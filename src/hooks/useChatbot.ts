@@ -57,6 +57,24 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
       .trim();
   }, []);
 
+  // Lista de palavras que NÃO são itens do menu
+  const nonMenuWords = useCallback((): string[] => {
+    return [
+      'ola', 'olá', 'oi', 'e ai', 'eai', 'bom dia', 'boa tarde', 'boa noite',
+      'obrigado', 'obrigada', 'valeu', 'tchau', 'ate logo', 'até logo',
+      'sim', 'nao', 'não', 'ok', 'certo', 'beleza', 'legal',
+      'quanto', 'como', 'onde', 'quando', 'porque', 'por que',
+      'cardapio', 'menu', 'opcoes', 'opções', 'pedido', 'pedir',
+      'quero', 'gostaria', 'pode', 'consegue', 'ajuda', 'ajudar'
+    ];
+  }, []);
+
+  // Função para verificar se é uma palavra comum (não item do menu)
+  const isCommonWord = useCallback((query: string): boolean => {
+    const normalized = normalizeText(query);
+    return nonMenuWords().some(word => normalized === word || normalized.includes(word));
+  }, [normalizeText, nonMenuWords]);
+
   // Função para calcular similaridade entre strings melhorada
   const calculateSimilarity = useCallback((str1: string, str2: string): number => {
     const s1 = normalizeText(str1);
@@ -98,9 +116,15 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
     const normalizedQuery = normalizeText(query);
     console.log('Procurando por (normalizado):', normalizedQuery);
     
-    // 1. Busca exata no nome normalizado
+    // Primeiro verificar se é uma palavra comum que não deve ser interpretada como item
+    if (isCommonWord(query)) {
+      console.log('Palavra comum detectada, não é item do menu:', normalizedQuery);
+      return null;
+    }
+    
+    // 1. Busca exata no nome normalizado (mais restritiva)
     let found = menu.find(item => 
-      item.available && normalizeText(item.name).includes(normalizedQuery)
+      item.available && normalizeText(item.name) === normalizedQuery
     );
     
     if (found) {
@@ -108,82 +132,86 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
       return found;
     }
     
-    // 2. Busca por palavras-chave expandida com variações
-    const searchTerms = [
-      { keywords: ['margherita', 'marguerita', 'margarita', 'margaritta', 'margerita', 'margarida'], pizza: 'margherita' },
-      { keywords: ['calabresa', 'calabreza', 'calebresa', 'calebresa', 'kalabresa'], pizza: 'calabresa' },
-      { keywords: ['portuguesa', 'portugueza', 'portugesa', 'portuguza'], pizza: 'portuguesa' },
-      { keywords: ['frango', 'franco', 'catupiry', 'catupiri', 'catupury', 'katupiry'], pizza: 'frango' },
-      { keywords: ['4 queijos', 'quatro queijos', '4queijos', 'quatroqueijos', 'quatro queijo', '4queijo'], pizza: '4 queijos' },
-      { keywords: ['presunto', 'prezunto', 'preçunto', 'queijo'], pizza: 'presunto' },
-      { keywords: ['file', 'filee', 'mignon', 'minion', 'fillet'], pizza: 'filé' },
-      { keywords: ['strogonoff', 'strogonof', 'estrogonoff', 'estrogonof'], pizza: 'strogonoff' },
-      { keywords: ['fernando'], pizza: 'fernando' },
-      { keywords: ['mussarela', 'muçarela', 'mozarela', 'mossarela', 'musarela'], pizza: 'mussarela' },
-      { keywords: ['2 queijos', 'dois queijos', 'doisqueijos', '2queijos'], pizza: '2 queijos' },
-      { keywords: ['3 queijos', 'três queijos', 'tresqueijos', '3queijos', 'tres queijos'], pizza: '3 queijos' },
-      { keywords: ['4 carnes', 'quatro carnes', 'quatrocarnes', '4carnes'], pizza: '4 carnes' },
-      { keywords: ['lombo'], pizza: 'lombo' },
-      { keywords: ['especial', 'espesial', 'espessial'], pizza: 'especial' },
-      { keywords: ['melt'], pizza: 'melt' },
-      { keywords: ['palmito', 'palmitto', 'palmetto'], pizza: 'palmito' },
-      { keywords: ['milho', 'miho', 'milhu'], pizza: 'milho' },
-      { keywords: ['brocolis', 'broculi', 'brócolli', 'broculis'], pizza: 'brócolis' },
-      { keywords: ['rucula', 'rukula', 'rucola'], pizza: 'rúcula' },
-    ];
-    
-    // Busca por termos específicos com alta tolerância
-    for (const term of searchTerms) {
-      for (const keyword of term.keywords) {
-        const similarity = calculateSimilarity(normalizedQuery, keyword);
-        if (similarity > 0.6) {
-          found = menu.find(item => 
-            item.available && normalizeText(item.name).includes(term.pizza)
-          );
-          if (found) {
-            console.log('Encontrado por palavra-chave com correção:', found.name, 'Similaridade:', similarity);
-            return found;
-          }
-        }
-      }
-    }
-    
-    // 3. Busca fuzzy em todos os itens com limiar mais baixo
-    let bestMatch: MenuItem | null = null;
-    let bestScore = 0;
-    
-    for (const item of menu) {
-      if (!item.available) continue;
+    // 2. Busca por palavras-chave expandida com variações (apenas se tiver mais de 3 caracteres)
+    if (normalizedQuery.length > 3) {
+      const searchTerms = [
+        { keywords: ['margherita', 'marguerita', 'margarita', 'margaritta', 'margerita', 'margarida'], pizza: 'margherita' },
+        { keywords: ['calabresa', 'calabreza', 'calebresa', 'calebresa', 'kalabresa'], pizza: 'calabresa' },
+        { keywords: ['portuguesa', 'portugueza', 'portugesa', 'portuguza'], pizza: 'portuguesa' },
+        { keywords: ['frango', 'franco', 'catupiry', 'catupiri', 'catupury', 'katupiry'], pizza: 'frango' },
+        { keywords: ['4 queijos', 'quatro queijos', '4queijos', 'quatroqueijos', 'quatro queijo', '4queijo'], pizza: '4 queijos' },
+        { keywords: ['presunto', 'prezunto', 'preçunto'], pizza: 'presunto' },
+        { keywords: ['file', 'filee', 'mignon', 'minion', 'fillet'], pizza: 'filé' },
+        { keywords: ['strogonoff', 'strogonof', 'estrogonoff', 'estrogonof'], pizza: 'strogonoff' },
+        { keywords: ['fernando'], pizza: 'fernando' },
+        { keywords: ['mussarela', 'muçarela', 'mozarela', 'mossarela', 'musarela'], pizza: 'mussarela' },
+        { keywords: ['2 queijos', 'dois queijos', 'doisqueijos', '2queijos'], pizza: '2 queijos' },
+        { keywords: ['3 queijos', 'três queijos', 'tresqueijos', '3queijos', 'tres queijos'], pizza: '3 queijos' },
+        { keywords: ['4 carnes', 'quatro carnes', 'quatrocarnes', '4carnes'], pizza: '4 carnes' },
+        { keywords: ['lombo'], pizza: 'lombo' },
+        { keywords: ['especial', 'espesial', 'espessial'], pizza: 'especial' },
+        { keywords: ['melt'], pizza: 'melt' },
+        { keywords: ['palmito', 'palmitto', 'palmetto'], pizza: 'palmito' },
+        { keywords: ['milho', 'miho', 'milhu'], pizza: 'milho' },
+        { keywords: ['brocolis', 'broculi', 'brócolli', 'broculis'], pizza: 'brócolis' },
+        { keywords: ['rucula', 'rukula', 'rucola'], pizza: 'rúcula' },
+      ];
       
-      const similarity = calculateSimilarity(normalizedQuery, item.name);
-      if (similarity > 0.5 && similarity > bestScore) {
-        bestScore = similarity;
-        bestMatch = item;
-      }
-      
-      // Também testa similaridade com palavras individuais
-      const itemWords = normalizeText(item.name).split(' ');
-      const queryWords = normalizedQuery.split(' ');
-      
-      for (const itemWord of itemWords) {
-        for (const queryWord of queryWords) {
-          if (queryWord.length > 2) { // Só palavras com mais de 2 caracteres
-            const wordSimilarity = calculateSimilarity(queryWord, itemWord);
-            if (wordSimilarity > 0.7 && wordSimilarity > bestScore) {
-              bestScore = wordSimilarity;
-              bestMatch = item;
+      // Busca por termos específicos com alta tolerância
+      for (const term of searchTerms) {
+        for (const keyword of term.keywords) {
+          const similarity = calculateSimilarity(normalizedQuery, keyword);
+          if (similarity > 0.7) { // Aumentado o limiar
+            found = menu.find(item => 
+              item.available && normalizeText(item.name).includes(term.pizza)
+            );
+            if (found) {
+              console.log('Encontrado por palavra-chave com correção:', found.name, 'Similaridade:', similarity);
+              return found;
             }
           }
         }
       }
     }
     
-    if (bestMatch) {
-      console.log('Encontrado por busca fuzzy:', bestMatch.name, 'Score:', bestScore);
-      return bestMatch;
+    // 3. Busca fuzzy em todos os itens com limiar mais alto
+    if (normalizedQuery.length > 4) { // Só fazer busca fuzzy para palavras maiores
+      let bestMatch: MenuItem | null = null;
+      let bestScore = 0;
+      
+      for (const item of menu) {
+        if (!item.available) continue;
+        
+        const similarity = calculateSimilarity(normalizedQuery, item.name);
+        if (similarity > 0.7 && similarity > bestScore) { // Aumentado o limiar
+          bestScore = similarity;
+          bestMatch = item;
+        }
+        
+        // Também testa similaridade com palavras individuais
+        const itemWords = normalizeText(item.name).split(' ');
+        const queryWords = normalizedQuery.split(' ');
+        
+        for (const itemWord of itemWords) {
+          for (const queryWord of queryWords) {
+            if (queryWord.length > 3) { // Só palavras com mais de 3 caracteres
+              const wordSimilarity = calculateSimilarity(queryWord, itemWord);
+              if (wordSimilarity > 0.8 && wordSimilarity > bestScore) { // Aumentado o limiar
+                bestScore = wordSimilarity;
+                bestMatch = item;
+              }
+            }
+          }
+        }
+      }
+      
+      if (bestMatch) {
+        console.log('Encontrado por busca fuzzy:', bestMatch.name, 'Score:', bestScore);
+        return bestMatch;
+      }
     }
     
-    // 4. Busca por bordas com tolerância
+    // 4. Busca por bordas com tolerância (apenas se mencionar "borda" explicitamente)
     if (normalizedQuery.includes('borda')) {
       const bordaTypes = ['catupiry', 'cheddar', 'chocolate', 'mista', 'bacon', 'mussarela'];
       for (const type of bordaTypes) {
@@ -203,20 +231,22 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
     }
     
     // 5. Busca por bebidas com correção ortográfica melhorada
-    const beverageTerms = [
-      { keywords: ['coca', 'cocacola', 'coca-cola', 'refrigerante', 'refri', 'koka'], type: 'coca' },
-      { keywords: ['guarana', 'guarná', 'guaraná', 'guaranna'], type: 'guaraná' },
-      { keywords: ['suco', 'laranja', 'suk', 'laranja', 'zumo'], type: 'suco' }
-    ];
-    
-    for (const beverage of beverageTerms) {
-      for (const keyword of beverage.keywords) {
-        const similarity = calculateSimilarity(normalizedQuery, keyword);
-        if (similarity > 0.6) {
-          found = menu.find(item => item.available && normalizeText(item.name).includes(beverage.type));
-          if (found) {
-            console.log('Encontrado bebida:', found.name);
-            return found;
+    if (normalizedQuery.length > 3) {
+      const beverageTerms = [
+        { keywords: ['coca', 'cocacola', 'coca-cola', 'refrigerante', 'refri', 'koka'], type: 'coca' },
+        { keywords: ['guarana', 'guarná', 'guaraná', 'guaranna'], type: 'guaraná' },
+        { keywords: ['suco', 'laranja', 'suk', 'laranja', 'zumo'], type: 'suco' }
+      ];
+      
+      for (const beverage of beverageTerms) {
+        for (const keyword of beverage.keywords) {
+          const similarity = calculateSimilarity(normalizedQuery, keyword);
+          if (similarity > 0.7) { // Aumentado o limiar
+            found = menu.find(item => item.available && normalizeText(item.name).includes(beverage.type));
+            if (found) {
+              console.log('Encontrado bebida:', found.name);
+              return found;
+            }
           }
         }
       }
@@ -224,7 +254,7 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
     
     console.log('Nenhum item encontrado para:', normalizedQuery);
     return null;
-  }, [menu, calculateSimilarity, normalizeText]);
+  }, [menu, calculateSimilarity, normalizeText, isCommonWord]);
 
   const getItemIcon = useCallback((item: MenuItem): string => {
     switch (item.category) {
@@ -279,7 +309,6 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
         return { ...currentState, stage: 'human', awaitingHuman: true };
       }
 
-      // Fluxo de coleta de endereço
       if (currentState.stage === 'address') {
         if (!conversationContext.addressField) {
           // Começar coletando o nome
@@ -364,7 +393,6 @@ Obrigada por escolher a Pizzaria Frajola! 🍕❤️`, 'bot');
         }
       }
 
-      // Comando finalizar - ir para coleta de endereço
       if (lowerMessage.includes('finalizar')) {
         if (currentState.currentOrder.items.length === 0) {
           setTimeout(() => {
