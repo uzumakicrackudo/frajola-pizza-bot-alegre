@@ -1,4 +1,3 @@
-
 import { useState, useCallback } from 'react';
 import { ChatMessage, ChatbotState, MenuItem, OrderItem, CustomerInfo } from '@/types/chatbot';
 
@@ -49,33 +48,86 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
 
   const findMenuItem = useCallback((query: string): MenuItem | null => {
     const lowerQuery = query.toLowerCase();
+    console.log('Procurando por:', lowerQuery);
     
-    // Busca exata primeiro
+    // Busca exata primeiro - nome completo
     let found = menu.find(item => 
       item.available && item.name.toLowerCase().includes(lowerQuery)
     );
     
-    // Se não encontrar, busca por palavras-chave específicas
-    if (!found) {
-      if (lowerQuery.includes('margherita') || lowerQuery.includes('marguerita')) {
-        found = menu.find(item => item.name.toLowerCase().includes('margherita'));
-      } else if (lowerQuery.includes('calabresa')) {
-        found = menu.find(item => item.name.toLowerCase().includes('calabresa'));
-      } else if (lowerQuery.includes('portuguesa')) {
-        found = menu.find(item => item.name.toLowerCase().includes('portuguesa'));
-      } else if (lowerQuery.includes('frango')) {
-        found = menu.find(item => item.name.toLowerCase().includes('frango'));
-      } else if (lowerQuery.includes('4 queijos') || lowerQuery.includes('quatro queijos')) {
-        found = menu.find(item => item.name.toLowerCase().includes('4 queijos'));
-      } else if (lowerQuery.includes('presunto')) {
-        found = menu.find(item => item.name.toLowerCase().includes('presunto'));
-      } else if (lowerQuery.includes('filé') || lowerQuery.includes('file')) {
-        found = menu.find(item => item.name.toLowerCase().includes('filé'));
-      } else if (lowerQuery.includes('strogonoff')) {
-        found = menu.find(item => item.name.toLowerCase().includes('strogonoff'));
-      } else if (lowerQuery.includes('borda')) {
-        found = menu.find(item => item.name.toLowerCase().includes('borda') && item.name.toLowerCase().includes(lowerQuery.replace('borda', '').trim()));
+    if (found) {
+      console.log('Encontrado por busca exata:', found.name);
+      return found;
+    }
+    
+    // Busca por palavras-chave específicas expandida
+    const searchTerms = [
+      { keywords: ['margherita', 'marguerita', 'margarita'], pizza: 'margherita' },
+      { keywords: ['calabresa'], pizza: 'calabresa' },
+      { keywords: ['portuguesa'], pizza: 'portuguesa' },
+      { keywords: ['frango', 'catupiry'], pizza: 'frango' },
+      { keywords: ['4 queijos', 'quatro queijos', '4queijos'], pizza: '4 queijos' },
+      { keywords: ['presunto', 'queijo'], pizza: 'presunto' },
+      { keywords: ['filé', 'file', 'mignon'], pizza: 'filé' },
+      { keywords: ['strogonoff'], pizza: 'strogonoff' },
+      { keywords: ['fernando'], pizza: 'fernando' },
+      { keywords: ['mussarela'], pizza: 'mussarela' },
+      { keywords: ['2 queijos', 'dois queijos'], pizza: '2 queijos' },
+      { keywords: ['3 queijos', 'três queijos'], pizza: '3 queijos' },
+      { keywords: ['4 carnes', 'quatro carnes'], pizza: '4 carnes' },
+      { keywords: ['lombo'], pizza: 'lombo' },
+      { keywords: ['especial'], pizza: 'especial' },
+      { keywords: ['melt'], pizza: 'melt' },
+      { keywords: ['palmito'], pizza: 'palmito' },
+      { keywords: ['milho'], pizza: 'milho' },
+      { keywords: ['brócolis', 'brocolis'], pizza: 'brócolis' },
+      { keywords: ['rúcula', 'rucula'], pizza: 'rúcula' },
+    ];
+    
+    // Busca por termos específicos
+    for (const term of searchTerms) {
+      if (term.keywords.some(keyword => lowerQuery.includes(keyword))) {
+        found = menu.find(item => 
+          item.available && item.name.toLowerCase().includes(term.pizza)
+        );
+        if (found) {
+          console.log('Encontrado por palavra-chave:', found.name);
+          return found;
+        }
       }
+    }
+    
+    // Busca por bordas
+    if (lowerQuery.includes('borda')) {
+      const bordaTypes = ['catupiry', 'cheddar', 'chocolate', 'mista', 'bacon', 'mussarela'];
+      for (const type of bordaTypes) {
+        if (lowerQuery.includes(type)) {
+          found = menu.find(item => 
+            item.available && 
+            item.name.toLowerCase().includes('borda') && 
+            item.name.toLowerCase().includes(type)
+          );
+          if (found) {
+            console.log('Encontrado borda:', found.name);
+            return found;
+          }
+        }
+      }
+    }
+    
+    // Busca por bebidas
+    if (lowerQuery.includes('coca') || lowerQuery.includes('refrigerante')) {
+      found = menu.find(item => item.available && item.name.toLowerCase().includes('coca'));
+    } else if (lowerQuery.includes('guaraná') || lowerQuery.includes('guarana')) {
+      found = menu.find(item => item.available && item.name.toLowerCase().includes('guaraná'));
+    } else if (lowerQuery.includes('suco') || lowerQuery.includes('laranja')) {
+      found = menu.find(item => item.available && item.name.toLowerCase().includes('suco'));
+    }
+    
+    if (found) {
+      console.log('Encontrado bebida:', found.name);
+    } else {
+      console.log('Nenhum item encontrado para:', lowerQuery);
     }
     
     return found || null;
@@ -338,6 +390,31 @@ Gostaria de adicionar mais alguma coisa? Digite "continuar pedido" para adiciona
             addMessage('🤔 Não encontrei esse item. Posso te mostrar nosso cardápio completo! Digite "cardápio" para ver todas as opções.', 'bot');
           }, 100);
         }
+        return currentState;
+      }
+
+      // Busca direta por item (quando usuário digita apenas o nome da pizza)
+      const directItem = findMenuItem(userMessage);
+      if (directItem && !lowerMessage.includes('cardápio') && !lowerMessage.includes('menu')) {
+        let itemText = `🍕 Ótima escolha! A ${directItem.name} é uma das nossas especialidades!`;
+        
+        if (directItem.ingredients.length > 0) {
+          const ingredientsList = directItem.ingredients.join(', ');
+          itemText += `\n\n🍅 Ingredientes: ${ingredientsList}`;
+        }
+        
+        itemText += `\n💰 Preço: R$ ${directItem.price.toFixed(2)}`;
+        if (directItem.priceSmall) {
+          itemText += ` (grande) ou R$ ${directItem.priceSmall.toFixed(2)} (broto)`;
+        }
+        
+        itemText += '\n\n😋 Gostaria de adicionar ao pedido? Digite "quero" ou "vou querer"!';
+        
+        setTimeout(() => {
+          addMessage(itemText, 'bot');
+        }, 100);
+        
+        setConversationContext({ lastQueriedItem: directItem, lastAction: null, addressField: null });
         return currentState;
       }
 
