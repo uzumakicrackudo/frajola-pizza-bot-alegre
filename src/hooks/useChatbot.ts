@@ -1,3 +1,4 @@
+
 import { useState, useCallback } from 'react';
 import { ChatMessage, ChatbotState, MenuItem, OrderItem, CustomerInfo } from '@/types/chatbot';
 
@@ -100,230 +101,299 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
   const processMessage = useCallback((userMessage: string) => {
     addMessage(userMessage, 'user');
 
-    const lowerMessage = userMessage.toLowerCase();
+    // Usar callback para ter acesso ao estado mais atual
+    setState(currentState => {
+      const lowerMessage = userMessage.toLowerCase();
 
-    // Verificar se quer falar com humano
-    if (lowerMessage.includes('humano') || lowerMessage.includes('atendente') || 
-        lowerMessage.includes('pessoa') || lowerMessage.includes('ajuda especializada')) {
-      setState(prev => ({ ...prev, stage: 'human', awaitingHuman: true }));
-      addMessage('🤝 Entendo! Vou conectar você com um de nossos atendentes humanos. Por favor, aguarde um momento...', 'bot');
-      return;
-    }
+      // Verificar se quer falar com humano
+      if (lowerMessage.includes('humano') || lowerMessage.includes('atendente') || 
+          lowerMessage.includes('pessoa') || lowerMessage.includes('ajuda especializada')) {
+        
+        setTimeout(() => {
+          addMessage('🤝 Entendo! Vou conectar você com um de nossos atendentes humanos. Por favor, aguarde um momento...', 'bot');
+        }, 100);
+        
+        return { ...currentState, stage: 'human', awaitingHuman: true };
+      }
 
-    // Fluxo de coleta de endereço
-    if (state.stage === 'address') {
-      if (!conversationContext.addressField) {
-        // Começar coletando o nome
-        setState(prev => ({
-          ...prev,
-          currentOrder: {
-            ...prev.currentOrder,
-            customerInfo: { ...prev.currentOrder.customerInfo, name: userMessage }
-          }
-        }));
-        setConversationContext(prev => ({ ...prev, addressField: 'street' }));
-        addMessage('📍 Perfeito! Agora me diga o nome da sua rua:', 'bot');
-        return;
-      } else if (conversationContext.addressField === 'street') {
-        setState(prev => ({
-          ...prev,
-          currentOrder: {
-            ...prev.currentOrder,
-            customerInfo: { ...prev.currentOrder.customerInfo, street: userMessage }
-          }
-        }));
-        setConversationContext(prev => ({ ...prev, addressField: 'number' }));
-        addMessage('🏠 Agora me diga o número da sua casa:', 'bot');
-        return;
-      } else if (conversationContext.addressField === 'number') {
-        setState(prev => ({
-          ...prev,
-          currentOrder: {
-            ...prev.currentOrder,
-            customerInfo: { ...prev.currentOrder.customerInfo, number: userMessage }
-          }
-        }));
-        setConversationContext(prev => ({ ...prev, addressField: 'neighborhood' }));
-        addMessage('🏘️ Por último, qual é o seu bairro?', 'bot');
-        return;
-      } else if (conversationContext.addressField === 'neighborhood') {
-        setState(prev => ({
-          ...prev,
-          currentOrder: {
-            ...prev.currentOrder,
-            customerInfo: { ...prev.currentOrder.customerInfo, neighborhood: userMessage }
-          },
-          stage: 'confirmation'
-        }));
-        setConversationContext(prev => ({ ...prev, addressField: null }));
-        
-        // Mostrar resumo do pedido
-        const orderSummary = state.currentOrder.items.map(item => 
-          `• ${item.menuItem.name} - R$ ${item.menuItem.price.toFixed(2)}`
-        ).join('\n');
-        
-        addMessage(`🎉 Pedido confirmado! Aqui está o resumo:
+      // Fluxo de coleta de endereço
+      if (currentState.stage === 'address') {
+        if (!conversationContext.addressField) {
+          // Começar coletando o nome
+          setTimeout(() => {
+            addMessage('📍 Perfeito! Agora me diga o nome da sua rua:', 'bot');
+          }, 100);
+          
+          setConversationContext(prev => ({ ...prev, addressField: 'street' }));
+          
+          return {
+            ...currentState,
+            currentOrder: {
+              ...currentState.currentOrder,
+              customerInfo: { ...currentState.currentOrder.customerInfo, name: userMessage }
+            }
+          };
+        } else if (conversationContext.addressField === 'street') {
+          setTimeout(() => {
+            addMessage('🏠 Agora me diga o número da sua casa:', 'bot');
+          }, 100);
+          
+          setConversationContext(prev => ({ ...prev, addressField: 'number' }));
+          
+          return {
+            ...currentState,
+            currentOrder: {
+              ...currentState.currentOrder,
+              customerInfo: { ...currentState.currentOrder.customerInfo, street: userMessage }
+            }
+          };
+        } else if (conversationContext.addressField === 'number') {
+          setTimeout(() => {
+            addMessage('🏘️ Por último, qual é o seu bairro?', 'bot');
+          }, 100);
+          
+          setConversationContext(prev => ({ ...prev, addressField: 'neighborhood' }));
+          
+          return {
+            ...currentState,
+            currentOrder: {
+              ...currentState.currentOrder,
+              customerInfo: { ...currentState.currentOrder.customerInfo, number: userMessage }
+            }
+          };
+        } else if (conversationContext.addressField === 'neighborhood') {
+          const updatedOrder = {
+            ...currentState.currentOrder,
+            customerInfo: { ...currentState.currentOrder.customerInfo, neighborhood: userMessage }
+          };
+          
+          setTimeout(() => {
+            const orderSummary = updatedOrder.items.map(item => 
+              `• ${item.menuItem.name} - R$ ${item.menuItem.price.toFixed(2)}`
+            ).join('\n');
+            
+            addMessage(`🎉 Pedido confirmado! Aqui está o resumo:
 
 📋 **RESUMO DO PEDIDO:**
 ${orderSummary}
 
-💰 **Total:** R$ ${state.currentOrder.total.toFixed(2)}
+💰 **Total:** R$ ${updatedOrder.total.toFixed(2)}
 
 🏠 **Endereço de entrega:**
-${state.currentOrder.customerInfo.name}
-${state.currentOrder.customerInfo.street}, ${state.currentOrder.customerInfo.number}
-${state.currentOrder.customerInfo.neighborhood}
+${updatedOrder.customerInfo.name}
+${updatedOrder.customerInfo.street}, ${updatedOrder.customerInfo.number}
+${updatedOrder.customerInfo.neighborhood}
 
 ⏰ **Tempo estimado:** ${estimatedTime} minutos
 
 ✅ Seu pedido foi registrado! Nossa equipe já começou a preparar. Você receberá uma ligação para confirmar os detalhes!
 
 Obrigada por escolher a Pizzaria Frajola! 🍕❤️`, 'bot');
-        return;
+          }, 100);
+          
+          setConversationContext(prev => ({ ...prev, addressField: null }));
+          
+          return {
+            ...currentState,
+            stage: 'confirmation',
+            currentOrder: updatedOrder
+          };
+        }
       }
-    }
 
-    // Comando finalizar - ir para coleta de endereço
-    if (lowerMessage.includes('finalizar')) {
-      if (state.currentOrder.items.length === 0) {
-        addMessage('🤔 Você ainda não adicionou nenhum item ao pedido! Que tal escolher uma deliciosa pizza primeiro? Digite "cardápio" para ver nossas opções! 😊', 'bot');
-        return;
+      // Comando finalizar - ir para coleta de endereço
+      if (lowerMessage.includes('finalizar')) {
+        if (currentState.currentOrder.items.length === 0) {
+          setTimeout(() => {
+            addMessage('🤔 Você ainda não adicionou nenhum item ao pedido! Que tal escolher uma deliciosa pizza primeiro? Digite "cardápio" para ver nossas opções! 😊', 'bot');
+          }, 100);
+          return currentState;
+        }
+        
+        setTimeout(() => {
+          addMessage('🏠 Perfeito! Agora vou precisar do seu endereço para entrega. Primeiro, qual é o seu nome?', 'bot');
+        }, 100);
+        
+        setConversationContext(prev => ({ ...prev, addressField: null }));
+        return { ...currentState, stage: 'address' };
       }
-      
-      setState(prev => ({ ...prev, stage: 'address' }));
-      setConversationContext(prev => ({ ...prev, addressField: null }));
-      addMessage('🏠 Perfeito! Agora vou precisar do seu endereço para entrega. Primeiro, qual é o seu nome?', 'bot');
-      return;
-    }
 
-    // Comando continuar pedido
-    if (lowerMessage.includes('continuar pedido') || lowerMessage.includes('continuar')) {
-      setState(prev => ({ ...prev, stage: 'ordering' }));
-      addMessage('😋 Que ótimo! O que mais você gostaria de adicionar ao pedido? Posso te mostrar o cardápio novamente se quiser!', 'bot');
-      return;
-    }
-
-    // Verificar se é uma consulta de preço com contexto
-    if ((lowerMessage.includes('preço') || lowerMessage.includes('quanto custa') || lowerMessage.includes('valor')) && 
-        !findMenuItem(userMessage) && conversationContext.lastQueriedItem) {
-      const item = conversationContext.lastQueriedItem;
-      let priceText = `💰 A ${item.name} custa R$ ${item.price.toFixed(2)}`;
-      if (item.priceSmall) {
-        priceText += ` (tamanho grande) ou R$ ${item.priceSmall.toFixed(2)} (broto)`;
+      // Comando continuar pedido
+      if (lowerMessage.includes('continuar pedido') || lowerMessage.includes('continuar')) {
+        setTimeout(() => {
+          addMessage('😋 Que ótimo! O que mais você gostaria de adicionar ao pedido? Posso te mostrar o cardápio novamente se quiser!', 'bot');
+        }, 100);
+        return { ...currentState, stage: 'ordering' };
       }
-      priceText += '! Uma delícia que vale cada centavo! 😋';
-      addMessage(priceText, 'bot');
-      setConversationContext(prev => ({ ...prev, lastAction: 'price' }));
-      return;
-    }
 
-    // Verificar se é uma consulta de ingredientes com contexto
-    if ((lowerMessage.includes('ingrediente') || lowerMessage.includes('tem o que') || lowerMessage.includes('feita com')) && 
-        !findMenuItem(userMessage) && conversationContext.lastQueriedItem) {
-      const item = conversationContext.lastQueriedItem;
-      if (item.ingredients.length > 0) {
-        const ingredientsList = item.ingredients.join(', ');
-        addMessage(`🍅 A ${item.name} é feita com: ${ingredientsList}. Fica uma delícia! 😍`, 'bot');
-      } else {
-        addMessage(`A ${item.name} está pronta para você! 🥤`, 'bot');
-      }
-      setConversationContext(prev => ({ ...prev, lastAction: 'ingredients' }));
-      return;
-    }
-
-    // Verificar se quer adicionar o item do contexto
-    if ((lowerMessage.includes('quero') || lowerMessage.includes('vou querer') || lowerMessage.includes('adicionar') || 
-         lowerMessage.includes('pedir')) && conversationContext.lastQueriedItem && !findMenuItem(userMessage)) {
-      const item = conversationContext.lastQueriedItem;
-      addItemToOrder(item);
-      setState(prev => ({ ...prev, stage: 'ordering' }));
-      addMessage(`🎉 Perfeito! Adicionei a ${item.name} ao seu pedido! 
-
-💰 **Total atual:** R$ ${(state.currentOrder.total + item.price).toFixed(2)}
-
-Gostaria de adicionar mais alguma coisa? Digite "continuar pedido" para adicionar mais itens, ou "finalizar" para prosseguir com o endereço de entrega! 😊`, 'bot');
-      return;
-    }
-
-    // Consultas sobre preço com item específico
-    if (lowerMessage.includes('preço') || lowerMessage.includes('quanto custa') || lowerMessage.includes('valor')) {
-      const item = findMenuItem(userMessage);
-      if (item) {
+      // Verificar se é uma consulta de preço com contexto
+      if ((lowerMessage.includes('preço') || lowerMessage.includes('quanto custa') || lowerMessage.includes('valor')) && 
+          !findMenuItem(userMessage) && conversationContext.lastQueriedItem) {
+        const item = conversationContext.lastQueriedItem;
         let priceText = `💰 A ${item.name} custa R$ ${item.price.toFixed(2)}`;
         if (item.priceSmall) {
           priceText += ` (tamanho grande) ou R$ ${item.priceSmall.toFixed(2)} (broto)`;
         }
         priceText += '! Uma delícia que vale cada centavo! 😋';
-        addMessage(priceText, 'bot');
-        setConversationContext({ lastQueriedItem: item, lastAction: 'price', addressField: null });
-        return;
-      } else {
-        addMessage('🤔 Não encontrei esse item no nosso cardápio. Que tal dar uma olhada em nossas opções? Digite "cardápio" para ver tudo!', 'bot');
-        return;
+        
+        setTimeout(() => {
+          addMessage(priceText, 'bot');
+        }, 100);
+        
+        setConversationContext(prev => ({ ...prev, lastAction: 'price' }));
+        return currentState;
       }
-    }
 
-    // Consultas sobre ingredientes com item específico
-    if (lowerMessage.includes('ingrediente') || lowerMessage.includes('tem o que') || lowerMessage.includes('feita com')) {
-      const item = findMenuItem(userMessage);
-      if (item) {
+      // Verificar se é uma consulta de ingredientes com contexto
+      if ((lowerMessage.includes('ingrediente') || lowerMessage.includes('tem o que') || lowerMessage.includes('feita com')) && 
+          !findMenuItem(userMessage) && conversationContext.lastQueriedItem) {
+        const item = conversationContext.lastQueriedItem;
+        let ingredientsText;
         if (item.ingredients.length > 0) {
           const ingredientsList = item.ingredients.join(', ');
-          addMessage(`🍅 A ${item.name} é feita com: ${ingredientsList}. Fica uma delícia! 😍`, 'bot');
+          ingredientsText = `🍅 A ${item.name} é feita com: ${ingredientsList}. Fica uma delícia! 😍`;
         } else {
-          addMessage(`A ${item.name} está pronta para você! 🥤`, 'bot');
+          ingredientsText = `A ${item.name} está pronta para você! 🥤`;
         }
-        setConversationContext({ lastQueriedItem: item, lastAction: 'ingredients', addressField: null });
-        return;
-      } else {
-        addMessage('🤔 Não encontrei esse item. Posso te mostrar nosso cardápio completo! Digite "cardápio" para ver todas as opções.', 'bot');
-        return;
+        
+        setTimeout(() => {
+          addMessage(ingredientsText, 'bot');
+        }, 100);
+        
+        setConversationContext(prev => ({ ...prev, lastAction: 'ingredients' }));
+        return currentState;
       }
-    }
 
-    // Mostrar cardápio
-    if (lowerMessage.includes('cardápio') || lowerMessage.includes('menu') || lowerMessage.includes('opções')) {
-      const pizzas = menu.filter(item => item.category === 'pizza' && item.available);
-      const bebidas = menu.filter(item => item.category === 'bebida' && item.available);
-      const bordas = menu.filter(item => item.category === 'entrada' && item.available);
-      const sobremesas = menu.filter(item => item.category === 'sobremesa' && item.available);
-      
-      let menuText = '📋 Aqui está nosso delicioso cardápio da Pizzaria Frajola! 🍕\n\n🍕 PIZZAS CLÁSSICAS & ESPECIAIS:\n';
-      pizzas.slice(0, 10).forEach(pizza => {
-        menuText += `• ${pizza.name} - R$ ${pizza.price.toFixed(2)}\n`;
-      });
-      
-      if (bordas.length > 0) {
-        menuText += '\n🥖 BORDAS RECHEADAS:\n';
-        bordas.forEach(borda => {
-          menuText += `• ${borda.name} - R$ ${borda.price.toFixed(2)}\n`;
+      // Verificar se quer adicionar o item do contexto
+      if ((lowerMessage.includes('quero') || lowerMessage.includes('vou querer') || lowerMessage.includes('adicionar') || 
+           lowerMessage.includes('pedir')) && conversationContext.lastQueriedItem && !findMenuItem(userMessage)) {
+        const item = conversationContext.lastQueriedItem;
+        const newTotal = currentState.currentOrder.total + item.price;
+        
+        setTimeout(() => {
+          addMessage(`🎉 Perfeito! Adicionei a ${item.name} ao seu pedido! 
+
+💰 **Total atual:** R$ ${newTotal.toFixed(2)}
+
+Gostaria de adicionar mais alguma coisa? Digite "continuar pedido" para adicionar mais itens, ou "finalizar" para prosseguir com o endereço de entrega! 😊`, 'bot');
+        }, 100);
+
+        return {
+          ...currentState,
+          stage: 'ordering',
+          currentOrder: {
+            ...currentState.currentOrder,
+            items: [...currentState.currentOrder.items, {
+              menuItem: { ...item },
+              quantity: 1,
+              removedIngredients: []
+            }],
+            total: newTotal
+          }
+        };
+      }
+
+      // Consultas sobre preço com item específico
+      if (lowerMessage.includes('preço') || lowerMessage.includes('quanto custa') || lowerMessage.includes('valor')) {
+        const item = findMenuItem(userMessage);
+        if (item) {
+          let priceText = `💰 A ${item.name} custa R$ ${item.price.toFixed(2)}`;
+          if (item.priceSmall) {
+            priceText += ` (tamanho grande) ou R$ ${item.priceSmall.toFixed(2)} (broto)`;
+          }
+          priceText += '! Uma delícia que vale cada centavo! 😋';
+          
+          setTimeout(() => {
+            addMessage(priceText, 'bot');
+          }, 100);
+          
+          setConversationContext({ lastQueriedItem: item, lastAction: 'price', addressField: null });
+        } else {
+          setTimeout(() => {
+            addMessage('🤔 Não encontrei esse item no nosso cardápio. Que tal dar uma olhada em nossas opções? Digite "cardápio" para ver tudo!', 'bot');
+          }, 100);
+        }
+        return currentState;
+      }
+
+      // Consultas sobre ingredientes com item específico
+      if (lowerMessage.includes('ingrediente') || lowerMessage.includes('tem o que') || lowerMessage.includes('feita com')) {
+        const item = findMenuItem(userMessage);
+        if (item) {
+          let ingredientsText;
+          if (item.ingredients.length > 0) {
+            const ingredientsList = item.ingredients.join(', ');
+            ingredientsText = `🍅 A ${item.name} é feita com: ${ingredientsList}. Fica uma delícia! 😍`;
+          } else {
+            ingredientsText = `A ${item.name} está pronta para você! 🥤`;
+          }
+          
+          setTimeout(() => {
+            addMessage(ingredientsText, 'bot');
+          }, 100);
+          
+          setConversationContext({ lastQueriedItem: item, lastAction: 'ingredients', addressField: null });
+        } else {
+          setTimeout(() => {
+            addMessage('🤔 Não encontrei esse item. Posso te mostrar nosso cardápio completo! Digite "cardápio" para ver todas as opções.', 'bot');
+          }, 100);
+        }
+        return currentState;
+      }
+
+      // Mostrar cardápio
+      if (lowerMessage.includes('cardápio') || lowerMessage.includes('menu') || lowerMessage.includes('opções')) {
+        const pizzas = menu.filter(item => item.category === 'pizza' && item.available);
+        const bebidas = menu.filter(item => item.category === 'bebida' && item.available);
+        const bordas = menu.filter(item => item.category === 'entrada' && item.available);
+        const sobremesas = menu.filter(item => item.category === 'sobremesa' && item.available);
+        
+        let menuText = '📋 Aqui está nosso delicioso cardápio da Pizzaria Frajola! 🍕\n\n🍕 PIZZAS CLÁSSICAS & ESPECIAIS:\n';
+        pizzas.slice(0, 10).forEach(pizza => {
+          menuText += `• ${pizza.name} - R$ ${pizza.price.toFixed(2)}\n`;
         });
+        
+        if (bordas.length > 0) {
+          menuText += '\n🥖 BORDAS RECHEADAS:\n';
+          bordas.forEach(borda => {
+            menuText += `• ${borda.name} - R$ ${borda.price.toFixed(2)}\n`;
+          });
+        }
+        
+        if (bebidas.length > 0) {
+          menuText += '\n🥤 BEBIDAS:\n';
+          bebidas.forEach(bebida => {
+            menuText += `• ${bebida.name} - R$ ${bebida.price.toFixed(2)}\n`;
+          });
+        }
+        
+        menuText += '\n💡 Dica: Pergunte sobre ingredientes ou preços de qualquer item! O que te chama atenção? 😊\n📱 Também temos delivery! (17) - @pizzariamassamia';
+        
+        setTimeout(() => {
+          addMessage(menuText, 'bot');
+        }, 100);
+        
+        setConversationContext({ lastQueriedItem: null, lastAction: 'menu', addressField: null });
+        return currentState;
       }
-      
-      if (bebidas.length > 0) {
-        menuText += '\n🥤 BEBIDAS:\n';
-        bebidas.forEach(bebida => {
-          menuText += `• ${bebida.name} - R$ ${bebida.price.toFixed(2)}\n`;
-        });
+
+      // Fazer pedido
+      if (lowerMessage.includes('pedido') || lowerMessage.includes('quero') || lowerMessage.includes('pedir')) {
+        setTimeout(() => {
+          addMessage('🎉 Que ótimo! Vamos fazer seu pedido! Me diga qual pizza e bebidas você gostaria. Posso também personalizar removendo ingredientes se preferir! E não esqueça das nossas deliciosas bordas recheadas! 😋', 'bot');
+        }, 100);
+        
+        return { ...currentState, stage: 'ordering' };
       }
-      
-      menuText += '\n💡 Dica: Pergunte sobre ingredientes ou preços de qualquer item! O que te chama atenção? 😊\n📱 Também temos delivery! (17) - @pizzariamassamia';
-      
-      addMessage(menuText, 'bot');
-      setConversationContext({ lastQueriedItem: null, lastAction: 'menu', addressField: null });
-      return;
-    }
 
-    // Fazer pedido
-    if (lowerMessage.includes('pedido') || lowerMessage.includes('quero') || lowerMessage.includes('pedir')) {
-      setState(prev => ({ ...prev, stage: 'ordering' }));
-      addMessage('🎉 Que ótimo! Vamos fazer seu pedido! Me diga qual pizza e bebidas você gostaria. Posso também personalizar removendo ingredientes se preferir! E não esqueça das nossas deliciosas bordas recheadas! 😋', 'bot');
-      return;
-    }
-
-    // Resposta padrão amigável
-    addMessage('😊 Desculpe, não entendi muito bem! Posso te ajudar com:\n\n• Ver o cardápio completo\n• Consultar preços e ingredientes\n• Fazer um pedido\n• Falar com um atendente humano\n• Informações sobre delivery\n\nO que você gostaria de fazer? 🍕', 'bot');
-  }, [addMessage, findMenuItem, menu, setState, conversationContext, state.stage, state.currentOrder, estimatedTime, addItemToOrder]);
+      // Resposta padrão amigável
+      setTimeout(() => {
+        addMessage('😊 Desculpe, não entendi muito bem! Posso te ajudar com:\n\n• Ver o cardápio completo\n• Consultar preços e ingredientes\n• Fazer um pedido\n• Falar com um atendente humano\n• Informações sobre delivery\n\nO que você gostaria de fazer? 🍕', 'bot');
+      }, 100);
+      
+      return currentState;
+    });
+  }, [addMessage, findMenuItem, menu, estimatedTime, conversationContext]);
 
   return {
     state,
