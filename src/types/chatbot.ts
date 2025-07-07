@@ -1,11 +1,12 @@
-
 export interface MenuItem {
   id: string;
   name: string;
   price: number;
+  priceSmall?: number; // Para pizzas broto
   ingredients: string[];
   category: 'pizza' | 'bebida' | 'sobremesa' | 'entrada';
   available: boolean;
+  sizes?: ('grande' | 'broto')[];
 }
 
 export interface Order {

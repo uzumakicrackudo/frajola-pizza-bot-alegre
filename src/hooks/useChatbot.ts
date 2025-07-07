@@ -38,9 +38,36 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
 
   const findMenuItem = useCallback((query: string): MenuItem | null => {
     const lowerQuery = query.toLowerCase();
-    return menu.find(item => 
+    
+    // Busca exata primeiro
+    let found = menu.find(item => 
       item.available && item.name.toLowerCase().includes(lowerQuery)
-    ) || null;
+    );
+    
+    // Se não encontrar, busca por palavras-chave específicas
+    if (!found) {
+      if (lowerQuery.includes('margherita') || lowerQuery.includes('marguerita')) {
+        found = menu.find(item => item.name.toLowerCase().includes('margherita'));
+      } else if (lowerQuery.includes('calabresa')) {
+        found = menu.find(item => item.name.toLowerCase().includes('calabresa'));
+      } else if (lowerQuery.includes('portuguesa')) {
+        found = menu.find(item => item.name.toLowerCase().includes('portuguesa'));
+      } else if (lowerQuery.includes('frango')) {
+        found = menu.find(item => item.name.toLowerCase().includes('frango'));
+      } else if (lowerQuery.includes('4 queijos') || lowerQuery.includes('quatro queijos')) {
+        found = menu.find(item => item.name.toLowerCase().includes('4 queijos'));
+      } else if (lowerQuery.includes('presunto')) {
+        found = menu.find(item => item.name.toLowerCase().includes('presunto'));
+      } else if (lowerQuery.includes('filé') || lowerQuery.includes('file')) {
+        found = menu.find(item => item.name.toLowerCase().includes('filé'));
+      } else if (lowerQuery.includes('strogonoff')) {
+        found = menu.find(item => item.name.toLowerCase().includes('strogonoff'));
+      } else if (lowerQuery.includes('borda')) {
+        found = menu.find(item => item.name.toLowerCase().includes('borda') && item.name.toLowerCase().includes(lowerQuery.replace('borda', '').trim()));
+      }
+    }
+    
+    return found || null;
   }, [menu]);
 
   const processMessage = useCallback((userMessage: string) => {
@@ -60,7 +87,12 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
     if (lowerMessage.includes('preço') || lowerMessage.includes('quanto custa') || lowerMessage.includes('valor')) {
       const item = findMenuItem(userMessage);
       if (item) {
-        addMessage(`💰 A ${item.name} custa R$ ${item.price.toFixed(2)}! Uma delícia que vale cada centavo! 😋`, 'bot');
+        let priceText = `💰 A ${item.name} custa R$ ${item.price.toFixed(2)}`;
+        if (item.priceSmall) {
+          priceText += ` (tamanho grande) ou R$ ${item.priceSmall.toFixed(2)} (broto)`;
+        }
+        priceText += '! Uma delícia que vale cada centavo! 😋';
+        addMessage(priceText, 'bot');
         return;
       } else {
         addMessage('🤔 Não encontrei esse item no nosso cardápio. Que tal dar uma olhada em nossas opções? Digite "cardápio" para ver tudo!', 'bot');
@@ -89,18 +121,29 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
     if (lowerMessage.includes('cardápio') || lowerMessage.includes('menu') || lowerMessage.includes('opções')) {
       const pizzas = menu.filter(item => item.category === 'pizza' && item.available);
       const bebidas = menu.filter(item => item.category === 'bebida' && item.available);
+      const bordas = menu.filter(item => item.category === 'entrada' && item.available);
+      const sobremesas = menu.filter(item => item.category === 'sobremesa' && item.available);
       
-      let menuText = '📋 Aqui está nosso cardápio delicioso:\n\n🍕 PIZZAS:\n';
-      pizzas.forEach(pizza => {
+      let menuText = '📋 Aqui está nosso delicioso cardápio da Massa Mia! 🍕\n\n🍕 PIZZAS CLÁSSICAS & ESPECIAIS:\n';
+      pizzas.slice(0, 10).forEach(pizza => {
         menuText += `• ${pizza.name} - R$ ${pizza.price.toFixed(2)}\n`;
       });
       
-      menuText += '\n🥤 BEBIDAS:\n';
-      bebidas.forEach(bebida => {
-        menuText += `• ${bebida.name} - R$ ${bebida.price.toFixed(2)}\n`;
-      });
+      if (bordas.length > 0) {
+        menuText += '\n🥖 BORDAS RECHEADAS:\n';
+        bordas.forEach(borda => {
+          menuText += `• ${borda.name} - R$ ${borda.price.toFixed(2)}\n`;
+        });
+      }
       
-      menuText += '\n💡 Dica: Pergunte sobre ingredientes ou preços de qualquer item! O que te chama atenção? 😊';
+      if (bebidas.length > 0) {
+        menuText += '\n🥤 BEBIDAS:\n';
+        bebidas.forEach(bebida => {
+          menuText += `• ${bebida.name} - R$ ${bebida.price.toFixed(2)}\n`;
+        });
+      }
+      
+      menuText += '\n💡 Dica: Pergunte sobre ingredientes ou preços de qualquer item! O que te chama atenção? 😊\n📱 Também temos delivery! (17) - @pizzariamassamia';
       
       addMessage(menuText, 'bot');
       return;
@@ -109,13 +152,13 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
     // Fazer pedido
     if (lowerMessage.includes('pedido') || lowerMessage.includes('quero') || lowerMessage.includes('pedir')) {
       setState(prev => ({ ...prev, stage: 'ordering' }));
-      addMessage('🎉 Que ótimo! Vamos fazer seu pedido! Me diga qual pizza e bebidas você gostaria. Posso também personalizar removendo ingredientes se preferir!', 'bot');
+      addMessage('🎉 Que ótimo! Vamos fazer seu pedido! Me diga qual pizza e bebidas você gostaria. Posso também personalizar removendo ingredientes se preferir! E não esqueça das nossas deliciosas bordas recheadas! 😋', 'bot');
       return;
     }
 
     // Resposta padrão amigável
-    addMessage('😊 Desculpe, não entendi muito bem! Posso te ajudar com:\n\n• Ver o cardápio\n• Consultar preços e ingredientes\n• Fazer um pedido\n• Falar com um atendente humano\n\nO que você gostaria de fazer? 🍕', 'bot');
-  }, [addMessage, findMenuItem, menu]);
+    addMessage('😊 Desculpe, não entendi muito bem! Posso te ajudar com:\n\n• Ver o cardápio completo\n• Consultar preços e ingredientes\n• Fazer um pedido\n• Falar com um atendente humano\n• Informações sobre delivery\n\nO que você gostaria de fazer? 🍕', 'bot');
+  }, [addMessage, findMenuItem, menu, setState]);
 
   return {
     state,
