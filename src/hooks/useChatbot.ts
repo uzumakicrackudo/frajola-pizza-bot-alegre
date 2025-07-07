@@ -22,6 +22,15 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
     awaitingHuman: false
   });
 
+  // Contexto da conversa
+  const [conversationContext, setConversationContext] = useState<{
+    lastQueriedItem: MenuItem | null;
+    lastAction: 'price' | 'ingredients' | 'menu' | null;
+  }>({
+    lastQueriedItem: null,
+    lastAction: null
+  });
+
   const addMessage = useCallback((text: string, sender: 'user' | 'bot') => {
     const newMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -83,7 +92,48 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
       return;
     }
 
-    // Consultas sobre preço
+    // Verificar se é uma consulta de preço com contexto
+    if ((lowerMessage.includes('preço') || lowerMessage.includes('quanto custa') || lowerMessage.includes('valor')) && 
+        !findMenuItem(userMessage) && conversationContext.lastQueriedItem) {
+      const item = conversationContext.lastQueriedItem;
+      let priceText = `💰 A ${item.name} custa R$ ${item.price.toFixed(2)}`;
+      if (item.priceSmall) {
+        priceText += ` (tamanho grande) ou R$ ${item.priceSmall.toFixed(2)} (broto)`;
+      }
+      priceText += '! Uma delícia que vale cada centavo! 😋';
+      addMessage(priceText, 'bot');
+      setConversationContext(prev => ({ ...prev, lastAction: 'price' }));
+      return;
+    }
+
+    // Verificar se é uma consulta de ingredientes com contexto
+    if ((lowerMessage.includes('ingrediente') || lowerMessage.includes('tem o que') || lowerMessage.includes('feita com')) && 
+        !findMenuItem(userMessage) && conversationContext.lastQueriedItem) {
+      const item = conversationContext.lastQueriedItem;
+      if (item.ingredients.length > 0) {
+        const ingredientsList = item.ingredients.join(', ');
+        addMessage(`🍅 A ${item.name} é feita com: ${ingredientsList}. Fica uma delícia! 😍`, 'bot');
+      } else {
+        addMessage(`A ${item.name} está pronta para você! 🥤`, 'bot');
+      }
+      setConversationContext(prev => ({ ...prev, lastAction: 'ingredients' }));
+      return;
+    }
+
+    // Verificar se quer adicionar o item do contexto
+    if ((lowerMessage.includes('quero') || lowerMessage.includes('vou querer') || lowerMessage.includes('adicionar') || 
+         lowerMessage.includes('pedir')) && conversationContext.lastQueriedItem && !findMenuItem(userMessage)) {
+      const item = conversationContext.lastQueriedItem;
+      setState(prev => ({ ...prev, stage: 'ordering' }));
+      addMessage(`🎉 Perfeito! Vou adicionar a ${item.name} ao seu pedido! 
+      
+Gostaria de escolher o tamanho${item.priceSmall ? ' (grande ou broto)' : ''}? Ou quer remover algum ingrediente? 
+
+Digite "continuar pedido" se quiser adicionar mais itens, ou "finalizar" para prosseguir com o endereço! 😊`, 'bot');
+      return;
+    }
+
+    // Consultas sobre preço com item específico
     if (lowerMessage.includes('preço') || lowerMessage.includes('quanto custa') || lowerMessage.includes('valor')) {
       const item = findMenuItem(userMessage);
       if (item) {
@@ -93,6 +143,7 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
         }
         priceText += '! Uma delícia que vale cada centavo! 😋';
         addMessage(priceText, 'bot');
+        setConversationContext({ lastQueriedItem: item, lastAction: 'price' });
         return;
       } else {
         addMessage('🤔 Não encontrei esse item no nosso cardápio. Que tal dar uma olhada em nossas opções? Digite "cardápio" para ver tudo!', 'bot');
@@ -100,7 +151,7 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
       }
     }
 
-    // Consultas sobre ingredientes
+    // Consultas sobre ingredientes com item específico
     if (lowerMessage.includes('ingrediente') || lowerMessage.includes('tem o que') || lowerMessage.includes('feita com')) {
       const item = findMenuItem(userMessage);
       if (item) {
@@ -110,6 +161,7 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
         } else {
           addMessage(`A ${item.name} está pronta para você! 🥤`, 'bot');
         }
+        setConversationContext({ lastQueriedItem: item, lastAction: 'ingredients' });
         return;
       } else {
         addMessage('🤔 Não encontrei esse item. Posso te mostrar nosso cardápio completo! Digite "cardápio" para ver todas as opções.', 'bot');
@@ -146,6 +198,7 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
       menuText += '\n💡 Dica: Pergunte sobre ingredientes ou preços de qualquer item! O que te chama atenção? 😊\n📱 Também temos delivery! (17) - @pizzariamassamia';
       
       addMessage(menuText, 'bot');
+      setConversationContext({ lastQueriedItem: null, lastAction: 'menu' });
       return;
     }
 
@@ -158,13 +211,14 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
 
     // Resposta padrão amigável
     addMessage('😊 Desculpe, não entendi muito bem! Posso te ajudar com:\n\n• Ver o cardápio completo\n• Consultar preços e ingredientes\n• Fazer um pedido\n• Falar com um atendente humano\n• Informações sobre delivery\n\nO que você gostaria de fazer? 🍕', 'bot');
-  }, [addMessage, findMenuItem, menu, setState]);
+  }, [addMessage, findMenuItem, menu, setState, conversationContext]);
 
   return {
     state,
     setState,
     addMessage,
     processMessage,
-    findMenuItem
+    findMenuItem,
+    conversationContext
   };
 };
