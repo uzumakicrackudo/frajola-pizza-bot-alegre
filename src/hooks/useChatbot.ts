@@ -46,14 +46,33 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
     }));
   }, []);
 
-  // Função para calcular similaridade entre strings (Levenshtein distance simplificada)
+  // Função melhorada para normalizar texto (remove pontuação e acentos)
+  const normalizeText = useCallback((text: string): string => {
+    return text
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+      .replace(/[^\w\s]/g, '') // Remove pontuação
+      .replace(/\s+/g, ' ') // Normaliza espaços
+      .trim();
+  }, []);
+
+  // Função para calcular similaridade entre strings melhorada
   const calculateSimilarity = useCallback((str1: string, str2: string): number => {
-    const s1 = str1.toLowerCase().replace(/[^a-z]/g, '');
-    const s2 = str2.toLowerCase().replace(/[^a-z]/g, '');
+    const s1 = normalizeText(str1);
+    const s2 = normalizeText(str2);
     
-    if (s1.length === 0) return s2.length;
-    if (s2.length === 0) return s1.length;
+    if (s1.length === 0) return s2.length === 0 ? 1 : 0;
+    if (s2.length === 0) return 0;
     
+    // Se uma string contém a outra, alta similaridade
+    if (s1.includes(s2) || s2.includes(s1)) {
+      const minLen = Math.min(s1.length, s2.length);
+      const maxLen = Math.max(s1.length, s2.length);
+      return minLen / maxLen * 0.9; // Alta pontuação para contenção
+    }
+    
+    // Algoritmo de Levenshtein melhorado
     const matrix = Array(s2.length + 1).fill(null).map(() => Array(s1.length + 1).fill(null));
     
     for (let i = 0; i <= s1.length; i++) matrix[0][i] = i;
@@ -72,16 +91,16 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
     
     const maxLen = Math.max(s1.length, s2.length);
     return (maxLen - matrix[s2.length][s1.length]) / maxLen;
-  }, []);
+  }, [normalizeText]);
 
-  // Função melhorada para encontrar item no menu com tolerância a erros ortográficos
+  // Função melhorada para encontrar item no menu com melhor tolerância
   const findMenuItem = useCallback((query: string): MenuItem | null => {
-    const lowerQuery = query.toLowerCase();
-    console.log('Procurando por:', lowerQuery);
+    const normalizedQuery = normalizeText(query);
+    console.log('Procurando por (normalizado):', normalizedQuery);
     
-    // Busca exata primeiro - nome completo
+    // 1. Busca exata no nome normalizado
     let found = menu.find(item => 
-      item.available && item.name.toLowerCase().includes(lowerQuery)
+      item.available && normalizeText(item.name).includes(normalizedQuery)
     );
     
     if (found) {
@@ -89,56 +108,73 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
       return found;
     }
     
-    // Busca por palavras-chave específicas expandida com variações ortográficas
+    // 2. Busca por palavras-chave expandida com variações
     const searchTerms = [
-      { keywords: ['margherita', 'marguerita', 'margarita', 'margaritta', 'margerita'], pizza: 'margherita' },
-      { keywords: ['calabresa', 'calabreza', 'calebresa', 'calebresa'], pizza: 'calabresa' },
-      { keywords: ['portuguesa', 'portugueza', 'portugesa'], pizza: 'portuguesa' },
-      { keywords: ['frango', 'franco', 'catupiry', 'catupiri', 'catupury'], pizza: 'frango' },
-      { keywords: ['4 queijos', 'quatro queijos', '4queijos', 'quatroqueijos', 'quatro queijo'], pizza: '4 queijos' },
+      { keywords: ['margherita', 'marguerita', 'margarita', 'margaritta', 'margerita', 'margarida'], pizza: 'margherita' },
+      { keywords: ['calabresa', 'calabreza', 'calebresa', 'calebresa', 'kalabresa'], pizza: 'calabresa' },
+      { keywords: ['portuguesa', 'portugueza', 'portugesa', 'portuguza'], pizza: 'portuguesa' },
+      { keywords: ['frango', 'franco', 'catupiry', 'catupiri', 'catupury', 'katupiry'], pizza: 'frango' },
+      { keywords: ['4 queijos', 'quatro queijos', '4queijos', 'quatroqueijos', 'quatro queijo', '4queijo'], pizza: '4 queijos' },
       { keywords: ['presunto', 'prezunto', 'preçunto', 'queijo'], pizza: 'presunto' },
-      { keywords: ['filé', 'file', 'mignon', 'minion'], pizza: 'filé' },
-      { keywords: ['strogonoff', 'strogonof', 'estrogonoff'], pizza: 'strogonoff' },
+      { keywords: ['file', 'filee', 'mignon', 'minion', 'fillet'], pizza: 'filé' },
+      { keywords: ['strogonoff', 'strogonof', 'estrogonoff', 'estrogonof'], pizza: 'strogonoff' },
       { keywords: ['fernando'], pizza: 'fernando' },
-      { keywords: ['mussarela', 'muçarela', 'mozarela', 'mossarela'], pizza: 'mussarela' },
-      { keywords: ['2 queijos', 'dois queijos', 'doisqueijos'], pizza: '2 queijos' },
-      { keywords: ['3 queijos', 'três queijos', 'tresqueijos'], pizza: '3 queijos' },
-      { keywords: ['4 carnes', 'quatro carnes', 'quatrocarnes'], pizza: '4 carnes' },
+      { keywords: ['mussarela', 'muçarela', 'mozarela', 'mossarela', 'musarela'], pizza: 'mussarela' },
+      { keywords: ['2 queijos', 'dois queijos', 'doisqueijos', '2queijos'], pizza: '2 queijos' },
+      { keywords: ['3 queijos', 'três queijos', 'tresqueijos', '3queijos', 'tres queijos'], pizza: '3 queijos' },
+      { keywords: ['4 carnes', 'quatro carnes', 'quatrocarnes', '4carnes'], pizza: '4 carnes' },
       { keywords: ['lombo'], pizza: 'lombo' },
-      { keywords: ['especial', 'espesial'], pizza: 'especial' },
+      { keywords: ['especial', 'espesial', 'espessial'], pizza: 'especial' },
       { keywords: ['melt'], pizza: 'melt' },
-      { keywords: ['palmito', 'palmitto'], pizza: 'palmito' },
-      { keywords: ['milho', 'miho'], pizza: 'milho' },
-      { keywords: ['brócolis', 'brocolis', 'broculi', 'brócolli'], pizza: 'brócolis' },
-      { keywords: ['rúcula', 'rucula', 'rukula'], pizza: 'rúcula' },
+      { keywords: ['palmito', 'palmitto', 'palmetto'], pizza: 'palmito' },
+      { keywords: ['milho', 'miho', 'milhu'], pizza: 'milho' },
+      { keywords: ['brocolis', 'broculi', 'brócolli', 'broculis'], pizza: 'brócolis' },
+      { keywords: ['rucula', 'rukula', 'rucola'], pizza: 'rúcula' },
     ];
     
-    // Busca por termos específicos com tolerância a erros
+    // Busca por termos específicos com alta tolerância
     for (const term of searchTerms) {
       for (const keyword of term.keywords) {
-        if (lowerQuery.includes(keyword) || calculateSimilarity(lowerQuery, keyword) > 0.7) {
+        const similarity = calculateSimilarity(normalizedQuery, keyword);
+        if (similarity > 0.6) {
           found = menu.find(item => 
-            item.available && item.name.toLowerCase().includes(term.pizza)
+            item.available && normalizeText(item.name).includes(term.pizza)
           );
           if (found) {
-            console.log('Encontrado por palavra-chave com correção:', found.name);
+            console.log('Encontrado por palavra-chave com correção:', found.name, 'Similaridade:', similarity);
             return found;
           }
         }
       }
     }
     
-    // Busca fuzzy em todos os itens do menu
+    // 3. Busca fuzzy em todos os itens com limiar mais baixo
     let bestMatch: MenuItem | null = null;
     let bestScore = 0;
     
     for (const item of menu) {
       if (!item.available) continue;
       
-      const similarity = calculateSimilarity(lowerQuery, item.name);
-      if (similarity > 0.6 && similarity > bestScore) {
+      const similarity = calculateSimilarity(normalizedQuery, item.name);
+      if (similarity > 0.5 && similarity > bestScore) {
         bestScore = similarity;
         bestMatch = item;
+      }
+      
+      // Também testa similaridade com palavras individuais
+      const itemWords = normalizeText(item.name).split(' ');
+      const queryWords = normalizedQuery.split(' ');
+      
+      for (const itemWord of itemWords) {
+        for (const queryWord of queryWords) {
+          if (queryWord.length > 2) { // Só palavras com mais de 2 caracteres
+            const wordSimilarity = calculateSimilarity(queryWord, itemWord);
+            if (wordSimilarity > 0.7 && wordSimilarity > bestScore) {
+              bestScore = wordSimilarity;
+              bestMatch = item;
+            }
+          }
+        }
       }
     }
     
@@ -147,15 +183,16 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
       return bestMatch;
     }
     
-    // Busca por bordas
-    if (lowerQuery.includes('borda')) {
+    // 4. Busca por bordas com tolerância
+    if (normalizedQuery.includes('borda')) {
       const bordaTypes = ['catupiry', 'cheddar', 'chocolate', 'mista', 'bacon', 'mussarela'];
       for (const type of bordaTypes) {
-        if (lowerQuery.includes(type) || calculateSimilarity(lowerQuery, type) > 0.7) {
+        const similarity = calculateSimilarity(normalizedQuery, type);
+        if (similarity > 0.6) {
           found = menu.find(item => 
             item.available && 
-            item.name.toLowerCase().includes('borda') && 
-            item.name.toLowerCase().includes(type)
+            normalizeText(item.name).includes('borda') && 
+            normalizeText(item.name).includes(type)
           );
           if (found) {
             console.log('Encontrado borda:', found.name);
@@ -165,17 +202,18 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
       }
     }
     
-    // Busca por bebidas com correção ortográfica
+    // 5. Busca por bebidas com correção ortográfica melhorada
     const beverageTerms = [
-      { keywords: ['coca', 'cocacola', 'coca-cola', 'refrigerante', 'refri'], type: 'coca' },
-      { keywords: ['guaraná', 'guarana', 'guarná'], type: 'guaraná' },
-      { keywords: ['suco', 'laranja', 'suk', 'laranja'], type: 'suco' }
+      { keywords: ['coca', 'cocacola', 'coca-cola', 'refrigerante', 'refri', 'koka'], type: 'coca' },
+      { keywords: ['guarana', 'guarná', 'guaraná', 'guaranna'], type: 'guaraná' },
+      { keywords: ['suco', 'laranja', 'suk', 'laranja', 'zumo'], type: 'suco' }
     ];
     
     for (const beverage of beverageTerms) {
       for (const keyword of beverage.keywords) {
-        if (lowerQuery.includes(keyword) || calculateSimilarity(lowerQuery, keyword) > 0.7) {
-          found = menu.find(item => item.available && item.name.toLowerCase().includes(beverage.type));
+        const similarity = calculateSimilarity(normalizedQuery, keyword);
+        if (similarity > 0.6) {
+          found = menu.find(item => item.available && normalizeText(item.name).includes(beverage.type));
           if (found) {
             console.log('Encontrado bebida:', found.name);
             return found;
@@ -184,11 +222,10 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
       }
     }
     
-    console.log('Nenhum item encontrado para:', lowerQuery);
+    console.log('Nenhum item encontrado para:', normalizedQuery);
     return null;
-  }, [menu, calculateSimilarity]);
+  }, [menu, calculateSimilarity, normalizeText]);
 
-  // Função para obter ícone baseado na categoria
   const getItemIcon = useCallback((item: MenuItem): string => {
     switch (item.category) {
       case 'pizza':
