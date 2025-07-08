@@ -1,11 +1,6 @@
 
 import { useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL || '',
-  import.meta.env.VITE_SUPABASE_ANON_KEY || ''
-);
+import { supabase } from '@/integrations/supabase/client';
 
 export const useOpenAI = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -14,6 +9,8 @@ export const useOpenAI = () => {
     setIsLoading(true);
     
     try {
+      console.log('Calling OpenAI with message:', message);
+      
       const { data, error } = await supabase.functions.invoke('chat-with-openai', {
         body: {
           message,
@@ -26,7 +23,8 @@ export const useOpenAI = () => {
         throw error;
       }
 
-      return data.response || 'Desculpe, não consegui processar sua mensagem.';
+      console.log('OpenAI response received:', data);
+      return data?.response || 'Desculpe, não consegui processar sua mensagem.';
     } catch (error) {
       console.error('OpenAI call error:', error);
       return 'Desculpe, estou com problemas técnicos no momento. Posso te ajudar com informações sobre nossa pizzaria!';

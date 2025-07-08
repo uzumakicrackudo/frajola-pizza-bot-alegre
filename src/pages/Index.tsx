@@ -13,120 +13,142 @@ const Index = () => {
   const [estimatedTime, setEstimatedTime] = useState(45);
   const [showAdmin, setShowAdmin] = useState(false);
 
-  const { state, processMessage, isLoadingAI } = useChatbot(menu, estimatedTime);
+  console.log('Index component rendering');
 
-  const handleUpdateMenu = (newMenu: MenuItem[]) => {
-    setMenu(newMenu);
-  };
+  try {
+    const { state, processMessage, isLoadingAI } = useChatbot(menu, estimatedTime);
 
-  const handleUpdateTime = (newTime: number) => {
-    setEstimatedTime(newTime);
-  };
+    const handleUpdateMenu = (newMenu: MenuItem[]) => {
+      setMenu(newMenu);
+    };
 
-  if (showAdmin) {
+    const handleUpdateTime = (newTime: number) => {
+      setEstimatedTime(newTime);
+    };
+
+    if (showAdmin) {
+      return (
+        <div>
+          <div className="fixed top-4 right-4 z-10">
+            <Button
+              onClick={() => setShowAdmin(false)}
+              variant="outline"
+              className="flex items-center gap-2"
+            >
+              <MessageCircle className="w-4 h-4" />
+              Voltar ao Chat
+            </Button>
+          </div>
+          <AdminPanel
+            menu={menu}
+            estimatedTime={estimatedTime}
+            onUpdateMenu={handleUpdateMenu}
+            onUpdateTime={handleUpdateTime}
+          />
+        </div>
+      );
+    }
+
     return (
-      <div>
-        <div className="fixed top-4 right-4 z-10">
-          <Button
-            onClick={() => setShowAdmin(false)}
-            variant="outline"
-            className="flex items-center gap-2"
-          >
-            <MessageCircle className="w-4 h-4" />
-            Voltar ao Chat
+      <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50 p-4">
+        <div className="max-w-4xl mx-auto">
+          <div className="flex justify-between items-center mb-6">
+            <div className="text-center">
+              <h1 className="text-4xl font-bold text-gray-800 mb-2">
+                🍕 Pizzaria Frajola
+              </h1>
+              <p className="text-lg text-gray-600">
+                Sua assistente virtual está pronta para te atender!
+              </p>
+            </div>
+            <Button
+              onClick={() => setShowAdmin(true)}
+              variant="outline"
+              className="flex items-center gap-2"
+            >
+              <Settings className="w-4 h-4" />
+              Admin
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <ChatInterface
+                messages={state.messages}
+                onSendMessage={processMessage}
+                awaitingHuman={state.awaitingHuman}
+                isLoadingAI={isLoadingAI}
+              />
+            </div>
+
+            <div className="space-y-4">
+              <div className="bg-white rounded-lg shadow-lg p-4">
+                <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
+                  ⏰ Informações
+                </h3>
+                <div className="space-y-2 text-sm">
+                  <p><strong>Tempo de entrega:</strong> {estimatedTime} minutos</p>
+                  <p><strong>Status:</strong> {isLoadingAI ? 'Processando com IA...' : 'Online'}</p>
+                  <p><strong>Itens disponíveis:</strong> {menu.filter(item => item.available).length}</p>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-lg shadow-lg p-4">
+                <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
+                  🤖 IA Integrada
+                </h3>
+                <div className="space-y-2 text-sm text-gray-600">
+                  <p>• Conversas naturais com ChatGPT</p>
+                  <p>• Lógica especializada em pizzaria</p>
+                  <p>• Fallbacks inteligentes</p>
+                  <p>• Respostas contextuais</p>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-lg shadow-lg p-4">
+                <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
+                  💡 Dicas Rápidas
+                </h3>
+                <div className="space-y-2 text-sm text-gray-600">
+                  <p>• Digite "cardápio" para ver todas as opções</p>
+                  <p>• Pergunte sobre preços: "Quanto custa a margherita?"</p>
+                  <p>• Consulte ingredientes: "Ingredientes da portuguesa"</p>
+                  <p>• Fale "humano" se precisar de ajuda especial</p>
+                </div>
+              </div>
+
+              <div className="bg-orange-100 rounded-lg p-4">
+                <h3 className="font-semibold text-lg mb-2 text-orange-800">
+                  🎉 Promoção do Dia!
+                </h3>
+                <p className="text-sm text-orange-700">
+                  Peça 2 pizzas grandes e ganhe 1 refrigerante grátis!
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  } catch (error) {
+    console.error('Error in Index component:', error);
+    
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50 p-4 flex items-center justify-center">
+        <div className="bg-white rounded-lg shadow-lg p-8 text-center max-w-md">
+          <h1 className="text-2xl font-bold text-gray-800 mb-4">
+            🍕 Pizzaria Frajola
+          </h1>
+          <p className="text-gray-600 mb-4">
+            Ops! Algo deu errado. Recarregue a página para tentar novamente.
+          </p>
+          <Button onClick={() => window.location.reload()}>
+            Recarregar Página
           </Button>
         </div>
-        <AdminPanel
-          menu={menu}
-          estimatedTime={estimatedTime}
-          onUpdateMenu={handleUpdateMenu}
-          onUpdateTime={handleUpdateTime}
-        />
       </div>
     );
   }
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50 p-4">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <div className="text-center">
-            <h1 className="text-4xl font-bold text-gray-800 mb-2">
-              🍕 Pizzaria Frajola
-            </h1>
-            <p className="text-lg text-gray-600">
-              Sua assistente virtual está pronta para te atender!
-            </p>
-          </div>
-          <Button
-            onClick={() => setShowAdmin(true)}
-            variant="outline"
-            className="flex items-center gap-2"
-          >
-            <Settings className="w-4 h-4" />
-            Admin
-          </Button>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
-            <ChatInterface
-              messages={state.messages}
-              onSendMessage={processMessage}
-              awaitingHuman={state.awaitingHuman}
-              isLoadingAI={isLoadingAI}
-            />
-          </div>
-
-          <div className="space-y-4">
-            <div className="bg-white rounded-lg shadow-lg p-4">
-              <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
-                ⏰ Informações
-              </h3>
-              <div className="space-y-2 text-sm">
-                <p><strong>Tempo de entrega:</strong> {estimatedTime} minutos</p>
-                <p><strong>Status:</strong> {isLoadingAI ? 'Processando com IA...' : 'Online'}</p>
-                <p><strong>Itens disponíveis:</strong> {menu.filter(item => item.available).length}</p>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg shadow-lg p-4">
-              <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
-                🤖 IA Integrada
-              </h3>
-              <div className="space-y-2 text-sm text-gray-600">
-                <p>• Conversas naturais com ChatGPT</p>
-                <p>• Lógica especializada em pizzaria</p>
-                <p>• Fallbacks inteligentes</p>
-                <p>• Respostas contextuais</p>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg shadow-lg p-4">
-              <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
-                💡 Dicas Rápidas
-              </h3>
-              <div className="space-y-2 text-sm text-gray-600">
-                <p>• Digite "cardápio" para ver todas as opções</p>
-                <p>• Pergunte sobre preços: "Quanto custa a margherita?"</p>
-                <p>• Consulte ingredientes: "Ingredientes da portuguesa"</p>
-                <p>• Fale "humano" se precisar de ajuda especial</p>
-              </div>
-            </div>
-
-            <div className="bg-orange-100 rounded-lg p-4">
-              <h3 className="font-semibold text-lg mb-2 text-orange-800">
-                🎉 Promoção do Dia!
-              </h3>
-              <p className="text-sm text-orange-700">
-                Peça 2 pizzas grandes e ganhe 1 refrigerante grátis!
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 };
 
 export default Index;

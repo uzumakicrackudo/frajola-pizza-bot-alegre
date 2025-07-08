@@ -22,6 +22,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [inputMessage, setInputMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  console.log('ChatInterface rendering with:', { 
+    messagesCount: messages?.length || 0, 
+    awaitingHuman, 
+    isLoadingAI 
+  });
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -32,6 +38,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   const handleSend = () => {
     if (inputMessage.trim() && !awaitingHuman && !isLoadingAI) {
+      console.log('Sending message:', inputMessage);
       onSendMessage(inputMessage);
       setInputMessage('');
     }
@@ -46,6 +53,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   };
+
+  // Fallback se messages não estiver definido
+  const safeMessages = messages || [];
 
   return (
     <div className="flex flex-col h-[600px] bg-white rounded-lg shadow-lg">
@@ -73,7 +83,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       {/* Messages */}
       <ScrollArea className="flex-1 p-4">
         <div className="space-y-4">
-          {messages.map((message) => (
+          {safeMessages.map((message) => (
             <div
               key={message.id}
               className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
