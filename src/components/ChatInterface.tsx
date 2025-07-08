@@ -3,19 +3,21 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, User, Bot } from 'lucide-react';
+import { Send, User, Bot, Brain } from 'lucide-react';
 import { ChatMessage } from '@/types/chatbot';
 
 interface ChatInterfaceProps {
   messages: ChatMessage[];
   onSendMessage: (message: string) => void;
   awaitingHuman?: boolean;
+  isLoadingAI?: boolean;
 }
 
 export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   messages,
   onSendMessage,
-  awaitingHuman = false
+  awaitingHuman = false,
+  isLoadingAI = false
 }) => {
   const [inputMessage, setInputMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -26,10 +28,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, isLoadingAI]);
 
   const handleSend = () => {
-    if (inputMessage.trim() && !awaitingHuman) {
+    if (inputMessage.trim() && !awaitingHuman && !isLoadingAI) {
       onSendMessage(inputMessage);
       setInputMessage('');
     }
@@ -56,9 +58,15 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           <div>
             <h3 className="font-semibold">Frajola - Pizzaria Bot</h3>
             <p className="text-sm opacity-90">
-              {awaitingHuman ? 'Conectando com atendente...' : 'Online'}
+              {awaitingHuman ? 'Conectando com atendente...' : 
+               isLoadingAI ? 'Pensando...' : 'Online'}
             </p>
           </div>
+          {isLoadingAI && (
+            <div className="ml-auto">
+              <Brain className="w-4 h-4 animate-pulse" />
+            </div>
+          )}
         </div>
       </div>
 
@@ -96,6 +104,22 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               </div>
             </div>
           ))}
+          
+          {isLoadingAI && (
+            <div className="flex justify-start">
+              <div className="max-w-[80%] rounded-lg p-3 bg-gray-100 text-gray-800">
+                <div className="flex items-center gap-2">
+                  <Bot className="w-4 h-4 flex-shrink-0" />
+                  <div className="flex space-x-1">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          
           <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
@@ -112,10 +136,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Digite sua mensagem..."
+              placeholder={isLoadingAI ? "Aguarde..." : "Digite sua mensagem..."}
               className="flex-1"
+              disabled={isLoadingAI}
             />
-            <Button onClick={handleSend} size="icon">
+            <Button onClick={handleSend} size="icon" disabled={isLoadingAI}>
               <Send className="w-4 h-4" />
             </Button>
           </div>

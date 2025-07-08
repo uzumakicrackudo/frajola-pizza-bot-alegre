@@ -10,10 +10,10 @@ import { Settings, MessageCircle } from 'lucide-react';
 
 const Index = () => {
   const [menu, setMenu] = useState<MenuItem[]>(defaultMenu);
-  const [estimatedTime, setEstimatedTime] = useState(45); // 45 minutos padrão
+  const [estimatedTime, setEstimatedTime] = useState(45);
   const [showAdmin, setShowAdmin] = useState(false);
 
-  const { state, processMessage } = useChatbot(menu, estimatedTime);
+  const { state, processMessage, isLoadingAI } = useChatbot(menu, estimatedTime);
 
   const handleUpdateMenu = (newMenu: MenuItem[]) => {
     setMenu(newMenu);
@@ -74,6 +74,7 @@ const Index = () => {
               messages={state.messages}
               onSendMessage={processMessage}
               awaitingHuman={state.awaitingHuman}
+              isLoadingAI={isLoadingAI}
             />
           </div>
 
@@ -84,8 +85,20 @@ const Index = () => {
               </h3>
               <div className="space-y-2 text-sm">
                 <p><strong>Tempo de entrega:</strong> {estimatedTime} minutos</p>
-                <p><strong>Status:</strong> Online</p>
+                <p><strong>Status:</strong> {isLoadingAI ? 'Processando com IA...' : 'Online'}</p>
                 <p><strong>Itens disponíveis:</strong> {menu.filter(item => item.available).length}</p>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-lg p-4">
+              <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
+                🤖 IA Integrada
+              </h3>
+              <div className="space-y-2 text-sm text-gray-600">
+                <p>• Conversas naturais com ChatGPT</p>
+                <p>• Lógica especializada em pizzaria</p>
+                <p>• Fallbacks inteligentes</p>
+                <p>• Respostas contextuais</p>
               </div>
             </div>
 
