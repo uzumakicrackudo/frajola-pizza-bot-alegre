@@ -622,7 +622,19 @@ Gostaria de adicionar mais alguma coisa? Digite "continuar pedido" para adiciona
         const context = chatService.createContextForOpenAI(recentMessages);
         
         callOpenAI(userMessage, context).then(aiResponse => {
-          addMessage(aiResponse, 'bot');
+          // Se OpenAI retornou erro de quota, usar resposta padrão
+          if (aiResponse.includes('problemas técnicos') || aiResponse.includes('quota')) {
+            if (chatService.isCasualConversation(userMessage)) {
+              addMessage('😊 Olá! Eu sou a Frajola da Pizzaria! Como posso te ajudar hoje? Posso mostrar nosso cardápio, ajudar com pedidos ou tirar suas dúvidas sobre nossas deliciosas pizzas! 🍕', 'bot');
+            } else {
+              addMessage('😊 Desculpe, não entendi muito bem! Mas posso te ajudar com:\n\n• Ver o cardápio completo\n• Consultar preços e ingredientes\n• Fazer um pedido\n• Falar com um atendente humano\n\nO que você gostaria de fazer? 🍕', 'bot');
+            }
+          } else {
+            addMessage(aiResponse, 'bot');
+          }
+        }).catch(() => {
+          // Em caso de erro de rede
+          addMessage('😊 Olá! Sou a Frajola da Pizzaria! Como posso te ajudar hoje? Digite "cardápio" para ver nossas deliciosas opções! 🍕', 'bot');
         });
         
         return currentState;
