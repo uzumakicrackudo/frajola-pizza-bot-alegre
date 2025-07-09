@@ -26,16 +26,26 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
   const { callOpenAI, isLoading } = useOpenAI();
   const chatService = new ChatService(menu);
 
-  // Contexto da conversa
+  // Contexto da conversa melhorado
   const [conversationContext, setConversationContext] = useState<{
     lastQueriedItem: MenuItem | null;
-    lastAction: 'price' | 'ingredients' | 'menu' | null;
+    lastAction: 'price' | 'ingredients' | 'menu' | 'offer_extras' | null;
     addressField: 'name' | 'street' | 'number' | 'neighborhood' | null;
+    justAddedPizza: boolean;
+    waitingForExtraResponse: boolean;
   }>({
     lastQueriedItem: null,
     lastAction: null,
-    addressField: null
+    addressField: null,
+    justAddedPizza: false,
+    waitingForExtraResponse: false
   });
+
+  // Preços dos extras
+  const extrasMenu = {
+    bordaRecheada: { name: 'Borda Recheada', price: 8.00, category: 'entrada' as const },
+    refrigerante: { name: 'Refrigerante 350ml', price: 5.00, category: 'bebida' as const }
+  };
 
   const addMessage = useCallback((text: string, sender: 'user' | 'bot') => {
     const newMessage: ChatMessage = {
@@ -62,7 +72,7 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
       .trim();
   }, []);
 
-  // Função MUITO mais restritiva para encontrar itens no menu
+  // Função para encontrar itens no menu com contexto melhorado
   const findMenuItem = useCallback((query: string): MenuItem | null => {
     const normalizedQuery = normalizeText(query);
     console.log('🔍 Buscando por:', normalizedQuery);
@@ -81,7 +91,9 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
       'quanto', 'como', 'onde', 'quando', 'porque', 'por que', 'que',
       'cardapio', 'menu', 'pedido', 'pedir', 'quero', 'gostaria', 
       'pode', 'consegue', 'ajuda', 'ajudar', 'oque', 'o que',
-      'vai', 'tem', 'ingrediente', 'ingredientes', 'feita', 'pizza', 'de'
+      'vai', 'tem', 'ingrediente', 'ingredientes', 'feita', 'pizza', 'de',
+      'preco', 'preço', 'valor', 'custa', 'dessa', 'dela', 'dele', 'essa',
+      'borda', 'refrigerante'
     ];
     
     // Se for apenas uma palavra comum, não buscar
@@ -228,6 +240,83 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
     }));
   }, []);
 
+  // Função para processar resposta a extras
+  const processExtrasResponse = useCallback((userMessage: string, currentState: ChatbotState) => {
+    const lowerMessage = userMessage.toLowerCase();
+    const newItems: OrderItem[] = [];
+    let addedExtras: string[] = [];
+    let totalExtraPrice = 0;
+
+    // Verifica se quer borda recheada
+    if (lowerMessage.includes('borda') || lowerMessage.includes('sim') && lowerMessage.includes('borda')) {
+      newItems.push({
+        menuItem: { 
+          id: 'borda-1', 
+          name: extrasMenu.bordaRecheada.name, 
+          price: extrasMenu.bordaRecheada.price,
+          ingredients: [],
+          category: extrasMenu.bordaRecheada.category,
+          available: true 
+        },
+        quantity: 1,
+        removedIngredients: []
+      });
+      addedExtras.push(`🥖 ${extrasMenu.bordaRecheada.name} - R$ ${extrasMenu.bordaRecheada.price.toFixed(2)}`);
+      totalExtraPrice += extrasMenu.bordaRecheada.price;
+    }
+
+    // Verifica se quer refrigerante
+    if (lowerMessage.includes('refrigerante') || lowerMessage.includes('coca') || lowerMessage.includes('bebida') || 
+        (lowerMessage.includes('sim') && !lowerMessage.includes('borda'))) {
+      newItems.push({
+        menuItem: { 
+          id: 'refri-1', 
+          name: extrasMenu.refrigerante.name, 
+          price: extrasMenu.refrigerante.price,
+          ingredients: [],
+          category: extrasMenu.refrigerante.category,
+          available: true 
+        },
+        quantity: 1,
+        removedIngredients: []
+      });
+      addedExtras.push(`🥤 ${extrasMenu.refrigerante.name} - R$ ${extrasMenu.refrigerante.price.toFixed(2)}`);
+      totalExtraPrice += extrasMenu.refrigerante.price;
+    }
+
+    if (addedExtras.length > 0) {
+      const newTotal = currentState.currentOrder.total + totalExtraPrice;
+      
+      setTimeout(() => {
+        addMessage(`🎉 Perfeito! Adicionei ao seu pedido:
+
+${addedExtras.join('\n')}
+
+💰 **Total atual:** R$ ${newTotal.toFixed(2)}
+
+Quer adicionar mais alguma coisa? Fala "continuar pedido" ou "finalizar" para prosseguir! 😊`, 'bot');
+      }, 100);
+
+      return {
+        ...currentState,
+        stage: 'ordering' as const,
+        currentOrder: {
+          ...currentState.currentOrder,
+          items: [...currentState.currentOrder.items, ...newItems],
+          total: newTotal
+        }
+      };
+    } else if (lowerMessage.includes('nao') || lowerMessage.includes('não') || lowerMessage.includes('obrigado')) {
+      setTimeout(() => {
+        addMessage('😊 Sem problemas! Quer adicionar mais alguma coisa? Fala "continuar pedido" ou "finalizar" para prosseguir!', 'bot');
+      }, 100);
+      
+      return { ...currentState, stage: 'ordering' as const };
+    }
+
+    return currentState;
+  }, [addMessage, extrasMenu]);
+
   const processMessage = useCallback(async (userMessage: string) => {
     addMessage(userMessage, 'user');
 
@@ -235,6 +324,13 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
     
     setState(currentState => {
       const lowerMessage = userMessage.toLowerCase();
+
+      // Processar resposta para extras se estiver aguardando
+      if (conversationContext.waitingForExtraResponse) {
+        const newState = processExtrasResponse(userMessage, currentState);
+        setConversationContext(prev => ({ ...prev, waitingForExtraResponse: false, justAddedPizza: false }));
+        return newState;
+      }
 
       // Sempre processar solicitações de humano primeiro
       if (lowerMessage.includes('humano') || lowerMessage.includes('atendente') || 
@@ -358,11 +454,19 @@ Obrigada por escolher a Pizzaria Frajola! 🍕❤️`, 'bot');
           return { ...currentState, stage: 'ordering' };
         }
 
-        // Consultas sobre ingredientes - MELHORADA
+        // Consultas sobre ingredientes com contexto melhorado
         if (lowerMessage.includes('ingrediente') || lowerMessage.includes('tem o que') || 
             lowerMessage.includes('feita com') || lowerMessage.includes('oque vai') || 
             lowerMessage.includes('o que vai')) {
-          const item = findMenuItem(userMessage);
+          let item = findMenuItem(userMessage);
+          
+          // Se não encontrou item específico, usar o último item do contexto
+          if (!item && conversationContext.lastQueriedItem && 
+              (lowerMessage.includes('ingrediente') || lowerMessage.includes('o que vai') || 
+               lowerMessage.includes('oque vai') || lowerMessage.includes('tem o que'))) {
+            item = conversationContext.lastQueriedItem;
+          }
+
           if (item) {
             let ingredientsText;
             if (item.ingredients.length > 0) {
@@ -382,7 +486,7 @@ Que tal adicionar ao pedido? Fala "quero" que eu coloco! 😊`;
               addMessage(ingredientsText, 'bot');
             }, 100);
             
-            setConversationContext({ lastQueriedItem: item, lastAction: 'ingredients', addressField: null });
+            setConversationContext(prev => ({ ...prev, lastQueriedItem: item, lastAction: 'ingredients', justAddedPizza: false }));
           } else {
             setTimeout(() => {
               addMessage('🤔 Hmm, não consegui identificar qual item você está perguntando! Pode me falar o nome da pizza de novo? Ou digite "cardápio" para ver todas as opções! 😊', 'bot');
@@ -391,10 +495,17 @@ Que tal adicionar ao pedido? Fala "quero" que eu coloco! 😊`;
           return currentState;
         }
 
-        // Consultas sobre preço - MELHORADA
+        // Consultas sobre preço com contexto melhorado
         if (lowerMessage.includes('preço') || lowerMessage.includes('quanto custa') || 
             lowerMessage.includes('valor') || lowerMessage.includes('quanto')) {
-          const item = findMenuItem(userMessage);
+          let item = findMenuItem(userMessage);
+          
+          // Se não encontrou item específico, usar o último item do contexto
+          if (!item && conversationContext.lastQueriedItem && 
+              (lowerMessage.includes('preço') || lowerMessage.includes('quanto') || lowerMessage.includes('valor'))) {
+            item = conversationContext.lastQueriedItem;
+          }
+
           if (item) {
             let priceText = `💰 A ${getItemIcon(item)} ${item.name} sai por R$ ${item.price.toFixed(2)}`;
             if (item.priceSmall) {
@@ -408,7 +519,7 @@ Um preço justo por uma pizza deliciosa! 😋 Gostaria de adicionar ao pedido?`;
               addMessage(priceText, 'bot');
             }, 100);
             
-            setConversationContext({ lastQueriedItem: item, lastAction: 'price', addressField: null });
+            setConversationContext(prev => ({ ...prev, lastQueriedItem: item, lastAction: 'price', justAddedPizza: false }));
           } else {
             setTimeout(() => {
               addMessage('🤔 Não consegui identificar qual item você quer saber o preço! Pode repetir o nome? Ou digite "cardápio" para ver tudo com os preços! 💰', 'bot');
@@ -438,7 +549,7 @@ Um preço justo por uma pizza deliciosa! 😋 Gostaria de adicionar ao pedido?`;
             addMessage(itemText, 'bot');
           }, 100);
           
-          setConversationContext({ lastQueriedItem: directItem, lastAction: null, addressField: null });
+          setConversationContext(prev => ({ ...prev, lastQueriedItem: directItem, lastAction: null, justAddedPizza: false }));
           return currentState;
         }
 
@@ -449,13 +560,35 @@ Um preço justo por uma pizza deliciosa! 😋 Gostaria de adicionar ao pedido?`;
           const item = conversationContext.lastQueriedItem;
           const newTotal = currentState.currentOrder.total + item.price;
           
-          setTimeout(() => {
-            addMessage(`🎉 Perfeito! Coloquei a ${getItemIcon(item)} ${item.name} no seu pedido! 
+          // Se for uma pizza, oferecer extras
+          if (item.category === 'pizza') {
+            setTimeout(() => {
+              addMessage(`🎉 Perfeito! Coloquei a ${getItemIcon(item)} ${item.name} no seu pedido! 
+
+💰 **Total atual:** R$ ${newTotal.toFixed(2)}
+
+🍕 **Que tal complementar seu pedido?**
+🥖 Borda Recheada (+R$ ${extrasMenu.bordaRecheada.price.toFixed(2)})
+🥤 Refrigerante 350ml (+R$ ${extrasMenu.refrigerante.price.toFixed(2)})
+
+Quer adicionar algum desses extras? Ou fala "não" para continuar! 😊`, 'bot');
+            }, 100);
+
+            setConversationContext(prev => ({ 
+              ...prev, 
+              justAddedPizza: true, 
+              waitingForExtraResponse: true,
+              lastAction: 'offer_extras'
+            }));
+          } else {
+            setTimeout(() => {
+              addMessage(`🎉 Perfeito! Coloquei a ${getItemIcon(item)} ${item.name} no seu pedido! 
 
 💰 **Total atual:** R$ ${newTotal.toFixed(2)}
 
 Quer adicionar mais alguma coisa? Fala "continuar pedido" ou "finalizar" para prosseguir! 😊`, 'bot');
-          }, 100);
+            }, 100);
+          }
 
           return {
             ...currentState,
@@ -503,7 +636,12 @@ Quer adicionar mais alguma coisa? Fala "continuar pedido" ou "finalizar" para pr
             addMessage(menuText, 'bot');
           }, 100);
           
-          setConversationContext({ lastQueriedItem: null, lastAction: 'menu', addressField: null });
+          setConversationContext(prev => ({ 
+            ...prev, 
+            lastQueriedItem: null, 
+            lastAction: 'menu',
+            justAddedPizza: false 
+          }));
           return currentState;
         }
 
@@ -546,7 +684,7 @@ Quer adicionar mais alguma coisa? Fala "continuar pedido" ou "finalizar" para pr
       
       return currentState;
     });
-  }, [addMessage, findMenuItem, menu, estimatedTime, conversationContext, getItemIcon, callOpenAI, chatService]);
+  }, [addMessage, findMenuItem, menu, estimatedTime, conversationContext, getItemIcon, callOpenAI, chatService, processExtrasResponse, extrasMenu]);
 
   return {
     state,
