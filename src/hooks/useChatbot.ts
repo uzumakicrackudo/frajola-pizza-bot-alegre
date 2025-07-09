@@ -15,7 +15,7 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
     messages: [
       {
         id: '1',
-        text: '🍕 Olá! Eu sou a Frajola, sua assistente virtual da pizzaria! 😊 Estou aqui para ajudar você a fazer o melhor pedido! Como posso te ajudar hoje?',
+        text: '🍕 Oi! Eu sou a Frajola, sua assistente virtual da pizzaria! 😊 Estou aqui para te ajudar a fazer o melhor pedido! Como posso te ajudar hoje?',
         sender: 'bot',
         timestamp: new Date()
       }
@@ -51,215 +51,147 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
     }));
   }, []);
 
-  // Função melhorada para normalizar texto (remove pontuação e acentos)
+  // Função melhorada para normalizar texto
   const normalizeText = useCallback((text: string): string => {
     return text
       .toLowerCase()
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '') // Remove acentos
-      .replace(/[^\w\s]/g, '') // Remove pontuação
+      .replace(/[^\w\s]/g, ' ') // Substitui pontuação por espaço
       .replace(/\s+/g, ' ') // Normaliza espaços
       .trim();
   }, []);
 
-  // Lista de palavras que NÃO são itens do menu
-  const nonMenuWords = useCallback((): string[] => {
-    return [
-      'ola', 'olá', 'oi', 'e ai', 'eai', 'bom dia', 'boa tarde', 'boa noite',
-      'obrigado', 'obrigada', 'valeu', 'tchau', 'ate logo', 'até logo',
-      'sim', 'nao', 'não', 'ok', 'certo', 'beleza', 'legal',
-      'quanto', 'como', 'onde', 'quando', 'porque', 'por que',
-      'cardapio', 'menu', 'opcoes', 'opções', 'pedido', 'pedir',
-      'quero', 'gostaria', 'pode', 'consegue', 'ajuda', 'ajudar'
-    ];
-  }, []);
-
-  // Função para verificar se é uma palavra comum (não item do menu)
-  const isCommonWord = useCallback((query: string): boolean => {
-    const normalized = normalizeText(query);
-    return nonMenuWords().some(word => normalized === word || normalized.includes(word));
-  }, [normalizeText, nonMenuWords]);
-
-  // Função para calcular similaridade entre strings melhorada
-  const calculateSimilarity = useCallback((str1: string, str2: string): number => {
-    const s1 = normalizeText(str1);
-    const s2 = normalizeText(str2);
-    
-    if (s1.length === 0) return s2.length === 0 ? 1 : 0;
-    if (s2.length === 0) return 0;
-    
-    // Se uma string contém a outra, alta similaridade
-    if (s1.includes(s2) || s2.includes(s1)) {
-      const minLen = Math.min(s1.length, s2.length);
-      const maxLen = Math.max(s1.length, s2.length);
-      return minLen / maxLen * 0.9; // Alta pontuação para contenção
-    }
-    
-    // Algoritmo de Levenshtein melhorado
-    const matrix = Array(s2.length + 1).fill(null).map(() => Array(s1.length + 1).fill(null));
-    
-    for (let i = 0; i <= s1.length; i++) matrix[0][i] = i;
-    for (let j = 0; j <= s2.length; j++) matrix[j][0] = j;
-    
-    for (let j = 1; j <= s2.length; j++) {
-      for (let i = 1; i <= s1.length; i++) {
-        const indicator = s1[i - 1] === s2[j - 1] ? 0 : 1;
-        matrix[j][i] = Math.min(
-          matrix[j][i - 1] + 1,
-          matrix[j - 1][i] + 1,
-          matrix[j - 1][i - 1] + indicator
-        );
-      }
-    }
-    
-    const maxLen = Math.max(s1.length, s2.length);
-    return (maxLen - matrix[s2.length][s1.length]) / maxLen;
-  }, [normalizeText]);
-
-  // Função melhorada para encontrar item no menu com melhor tolerância
+  // Função MUITO mais restritiva para encontrar itens no menu
   const findMenuItem = useCallback((query: string): MenuItem | null => {
     const normalizedQuery = normalizeText(query);
-    console.log('Procurando por (normalizado):', normalizedQuery);
+    console.log('🔍 Buscando por:', normalizedQuery);
     
-    // Primeiro verificar se é uma palavra comum que não deve ser interpretada como item
-    if (isCommonWord(query)) {
-      console.log('Palavra comum detectada, não é item do menu:', normalizedQuery);
+    // Se a query for muito pequena, não buscar
+    if (normalizedQuery.length < 3) {
+      console.log('❌ Query muito pequena');
       return null;
     }
     
-    // 1. Busca exata no nome normalizado (mais restritiva)
-    let found = menu.find(item => 
-      item.available && normalizeText(item.name) === normalizedQuery
-    );
+    // Palavras que NÃO são itens do menu (expandida)
+    const stopWords = [
+      'ola', 'olá', 'oi', 'e ai', 'eai', 'bom dia', 'boa tarde', 'boa noite',
+      'obrigado', 'obrigada', 'valeu', 'tchau', 'ate logo', 'até logo',
+      'sim', 'nao', 'não', 'ok', 'certo', 'beleza', 'legal', 'show',
+      'quanto', 'como', 'onde', 'quando', 'porque', 'por que', 'que',
+      'cardapio', 'menu', 'pedido', 'pedir', 'quero', 'gostaria', 
+      'pode', 'consegue', 'ajuda', 'ajudar', 'oque', 'o que',
+      'vai', 'tem', 'ingrediente', 'ingredientes', 'feita', 'pizza', 'de'
+    ];
     
-    if (found) {
-      console.log('Encontrado por busca exata:', found.name);
-      return found;
+    // Se for apenas uma palavra comum, não buscar
+    const queryWords = normalizedQuery.split(' ').filter(word => word.length > 2);
+    if (queryWords.every(word => stopWords.includes(word))) {
+      console.log('❌ Apenas palavras comuns detectadas');
+      return null;
     }
     
-    // 2. Busca por palavras-chave expandida com variações (apenas se tiver mais de 3 caracteres)
-    if (normalizedQuery.length > 3) {
-      const searchTerms = [
-        { keywords: ['margherita', 'marguerita', 'margarita', 'margaritta', 'margerita', 'margarida'], pizza: 'margherita' },
-        { keywords: ['calabresa', 'calabreza', 'calebresa', 'calebresa', 'kalabresa'], pizza: 'calabresa' },
-        { keywords: ['portuguesa', 'portugueza', 'portugesa', 'portuguza'], pizza: 'portuguesa' },
-        { keywords: ['frango', 'franco', 'catupiry', 'catupiri', 'catupury', 'katupiry'], pizza: 'frango' },
-        { keywords: ['4 queijos', 'quatro queijos', '4queijos', 'quatroqueijos', 'quatro queijo', '4queijo'], pizza: '4 queijos' },
-        { keywords: ['presunto', 'prezunto', 'preçunto'], pizza: 'presunto' },
-        { keywords: ['file', 'filee', 'mignon', 'minion', 'fillet'], pizza: 'filé' },
-        { keywords: ['strogonoff', 'strogonof', 'estrogonoff', 'estrogonof'], pizza: 'strogonoff' },
-        { keywords: ['fernando'], pizza: 'fernando' },
-        { keywords: ['mussarela', 'muçarela', 'mozarela', 'mossarela', 'musarela'], pizza: 'mussarela' },
-        { keywords: ['2 queijos', 'dois queijos', 'doisqueijos', '2queijos'], pizza: '2 queijos' },
-        { keywords: ['3 queijos', 'três queijos', 'tresqueijos', '3queijos', 'tres queijos'], pizza: '3 queijos' },
-        { keywords: ['4 carnes', 'quatro carnes', 'quatrocarnes', '4carnes'], pizza: '4 carnes' },
-        { keywords: ['lombo'], pizza: 'lombo' },
-        { keywords: ['especial', 'espesial', 'espessial'], pizza: 'especial' },
-        { keywords: ['melt'], pizza: 'melt' },
-        { keywords: ['palmito', 'palmitto', 'palmetto'], pizza: 'palmito' },
-        { keywords: ['milho', 'miho', 'milhu'], pizza: 'milho' },
-        { keywords: ['brocolis', 'broculi', 'brócolli', 'broculis'], pizza: 'brócolis' },
-        { keywords: ['rucula', 'rukula', 'rucola'], pizza: 'rúcula' },
-      ];
-      
-      // Busca por termos específicos com alta tolerância
-      for (const term of searchTerms) {
-        for (const keyword of term.keywords) {
-          const similarity = calculateSimilarity(normalizedQuery, keyword);
-          if (similarity > 0.7) { // Aumentado o limiar
-            found = menu.find(item => 
-              item.available && normalizeText(item.name).includes(term.pizza)
-            );
-            if (found) {
-              console.log('Encontrado por palavra-chave com correção:', found.name, 'Similaridade:', similarity);
-              return found;
-            }
-          }
+    // Mapeamento EXATO de nomes (mais restritivo)
+    const exactMatches: { [key: string]: string } = {
+      'calabresa': 'Pizza Calabresa',
+      'margherita': 'Pizza Margherita',
+      'marguerita': 'Pizza Margherita',
+      'portuguesa': 'Pizza Portuguesa',
+      'frango catupiry': 'Pizza Frango com Catupiry',
+      'frango': 'Pizza Frango com Catupiry',
+      'presunto queijo': 'Pizza Presunto e Queijo',
+      'presunto': 'Pizza Presunto e Queijo',
+      'fernando': 'Pizza Fernando',
+      'mussarela': 'Pizza Mussarela',
+      '4 queijos': 'Pizza 4 Queijos',
+      'quatro queijos': 'Pizza 4 Queijos',
+      '3 queijos': 'Pizza 3 Queijos',
+      'tres queijos': 'Pizza 3 Queijos',
+      '2 queijos': 'Pizza 2 Queijos',
+      'dois queijos': 'Pizza 2 Queijos',
+      'file mignon': 'Pizza Filé Mignon',
+      'file': 'Pizza Filé Mignon',
+      'mignon': 'Pizza Filé Mignon',
+      '4 carnes': 'Pizza 4 Carnes',
+      'quatro carnes': 'Pizza 4 Carnes',
+      'lombo catupiry': 'Pizza Lombo com Catupiry',
+      'lombo': 'Pizza Lombo com Catupiry',
+      'frango especial': 'Pizza Frango Especial',
+      'strogonoff': 'Pizza Strogonoff',
+      'frango melt': 'Pizza Frango Melt',
+      'melt': 'Pizza Frango Melt',
+      'palmito catupiry': 'Pizza Palmito com Catupiry',
+      'palmito': 'Pizza Palmito com Catupiry',
+      'milho catupiry': 'Pizza Milho com Catupiry',
+      'milho': 'Pizza Milho com Catupiry',
+      'brocolis': 'Pizza Brócolis',
+      'rucula': 'Pizza Rúcula',
+      'coca': 'Coca Cola 350ml',
+      'coca cola': 'Coca Cola 350ml',
+      'guarana': 'Guaraná 350ml',
+      'suco laranja': 'Suco de Laranja 300ml',
+      'suco': 'Suco de Laranja 300ml'
+    };
+
+    // 1. Busca por correspondência exata primeiro
+    for (const [key, itemName] of Object.entries(exactMatches)) {
+      if (normalizedQuery.includes(key)) {
+        const found = menu.find(item => 
+          item.available && normalizeText(item.name) === normalizeText(itemName)
+        );
+        if (found) {
+          console.log('✅ Encontrado por mapeamento exato:', found.name);
+          return found;
         }
       }
     }
-    
-    // 3. Busca fuzzy em todos os itens com limiar mais alto
-    if (normalizedQuery.length > 4) { // Só fazer busca fuzzy para palavras maiores
-      let bestMatch: MenuItem | null = null;
-      let bestScore = 0;
+
+    // 2. Busca por palavras-chave específicas mais restritiva
+    const specificKeywords = [
+      { keywords: ['calabresa'], requiredWords: ['calabresa'] },
+      { keywords: ['margherita', 'marguerita'], requiredWords: ['margherita'] },
+      { keywords: ['portuguesa'], requiredWords: ['portuguesa'] },
+      { keywords: ['frango'], requiredWords: ['frango'] },
+      { keywords: ['presunto'], requiredWords: ['presunto'] },
+      { keywords: ['fernando'], requiredWords: ['fernando'] },
+      { keywords: ['mussarela'], requiredWords: ['mussarela'] },
+      { keywords: ['file', 'mignon'], requiredWords: ['file', 'mignon'] },
+      { keywords: ['lombo'], requiredWords: ['lombo'] },
+      { keywords: ['strogonoff'], requiredWords: ['strogonoff'] },
+      { keywords: ['palmito'], requiredWords: ['palmito'] },
+      { keywords: ['milho'], requiredWords: ['milho'] },
+      { keywords: ['brocolis'], requiredWords: ['brocolis'] },
+      { keywords: ['rucula'], requiredWords: ['rucula'] }
+    ];
+
+    for (const keywordGroup of specificKeywords) {
+      const hasAllRequired = keywordGroup.requiredWords.every(word => 
+        normalizedQuery.includes(word)
+      );
       
-      for (const item of menu) {
-        if (!item.available) continue;
+      if (hasAllRequired) {
+        const hasKeyword = keywordGroup.keywords.some(keyword => 
+          normalizedQuery.includes(keyword)
+        );
         
-        const similarity = calculateSimilarity(normalizedQuery, item.name);
-        if (similarity > 0.7 && similarity > bestScore) { // Aumentado o limiar
-          bestScore = similarity;
-          bestMatch = item;
-        }
-        
-        // Também testa similaridade com palavras individuais
-        const itemWords = normalizeText(item.name).split(' ');
-        const queryWords = normalizedQuery.split(' ');
-        
-        for (const itemWord of itemWords) {
-          for (const queryWord of queryWords) {
-            if (queryWord.length > 3) { // Só palavras com mais de 3 caracteres
-              const wordSimilarity = calculateSimilarity(queryWord, itemWord);
-              if (wordSimilarity > 0.8 && wordSimilarity > bestScore) { // Aumentado o limiar
-                bestScore = wordSimilarity;
-                bestMatch = item;
-              }
-            }
-          }
-        }
-      }
-      
-      if (bestMatch) {
-        console.log('Encontrado por busca fuzzy:', bestMatch.name, 'Score:', bestScore);
-        return bestMatch;
-      }
-    }
-    
-    // 4. Busca por bordas com tolerância (apenas se mencionar "borda" explicitamente)
-    if (normalizedQuery.includes('borda')) {
-      const bordaTypes = ['catupiry', 'cheddar', 'chocolate', 'mista', 'bacon', 'mussarela'];
-      for (const type of bordaTypes) {
-        const similarity = calculateSimilarity(normalizedQuery, type);
-        if (similarity > 0.6) {
-          found = menu.find(item => 
-            item.available && 
-            normalizeText(item.name).includes('borda') && 
-            normalizeText(item.name).includes(type)
-          );
+        if (hasKeyword) {
+          const found = menu.find(item => {
+            if (!item.available) return false;
+            const itemNormalized = normalizeText(item.name);
+            return keywordGroup.requiredWords.every(word => itemNormalized.includes(word));
+          });
+          
           if (found) {
-            console.log('Encontrado borda:', found.name);
+            console.log('✅ Encontrado por palavra-chave específica:', found.name);
             return found;
           }
         }
       }
     }
-    
-    // 5. Busca por bebidas com correção ortográfica melhorada
-    if (normalizedQuery.length > 3) {
-      const beverageTerms = [
-        { keywords: ['coca', 'cocacola', 'coca-cola', 'refrigerante', 'refri', 'koka'], type: 'coca' },
-        { keywords: ['guarana', 'guarná', 'guaraná', 'guaranna'], type: 'guaraná' },
-        { keywords: ['suco', 'laranja', 'suk', 'laranja', 'zumo'], type: 'suco' }
-      ];
-      
-      for (const beverage of beverageTerms) {
-        for (const keyword of beverage.keywords) {
-          const similarity = calculateSimilarity(normalizedQuery, keyword);
-          if (similarity > 0.7) { // Aumentado o limiar
-            found = menu.find(item => item.available && normalizeText(item.name).includes(beverage.type));
-            if (found) {
-              console.log('Encontrado bebida:', found.name);
-              return found;
-            }
-          }
-        }
-      }
-    }
-    
-    console.log('Nenhum item encontrado para:', normalizedQuery);
+
+    console.log('❌ Nenhum item encontrado para:', normalizedQuery);
     return null;
-  }, [menu, calculateSimilarity, normalizeText, isCommonWord]);
+  }, [menu, normalizeText]);
 
   const getItemIcon = useCallback((item: MenuItem): string => {
     switch (item.category) {
@@ -299,7 +231,6 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
   const processMessage = useCallback(async (userMessage: string) => {
     addMessage(userMessage, 'user');
 
-    // Verificar se deve usar OpenAI ou lógica da pizzaria
     const shouldUseAI = chatService.shouldUseOpenAI(userMessage);
     
     setState(currentState => {
@@ -310,7 +241,7 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
           lowerMessage.includes('pessoa') || lowerMessage.includes('ajuda especializada')) {
         
         setTimeout(() => {
-          addMessage('🤝 Entendo! Vou conectar você com um de nossos atendentes humanos. Por favor, aguarde um momento...', 'bot');
+          addMessage('🤝 Claro! Vou te conectar com um de nossos atendentes humanos. Aguarde só um instantinho...', 'bot');
         }, 100);
         
         return { ...currentState, stage: 'human', awaitingHuman: true };
@@ -321,7 +252,6 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
         
         if (currentState.stage === 'address') {
           if (!conversationContext.addressField) {
-            // Começar coletando o nome
             setTimeout(() => {
               addMessage('📍 Perfeito! Agora me diga o nome da sua rua:', 'bot');
             }, 100);
@@ -403,10 +333,11 @@ Obrigada por escolher a Pizzaria Frajola! 🍕❤️`, 'bot');
           }
         }
 
+        // Comando finalizar pedido
         if (lowerMessage.includes('finalizar')) {
           if (currentState.currentOrder.items.length === 0) {
             setTimeout(() => {
-              addMessage('🤔 Você ainda não adicionou nenhum item ao pedido! Que tal escolher uma deliciosa pizza primeiro? Digite "cardápio" para ver nossas opções! 😊', 'bot');
+              addMessage('🤔 Opa! Você ainda não escolheu nada! Que tal dar uma olhada no nosso cardápio? Digite "cardápio" para ver nossas delícias! 😊', 'bot');
             }, 100);
             return currentState;
           }
@@ -422,61 +353,108 @@ Obrigada por escolher a Pizzaria Frajola! 🍕❤️`, 'bot');
         // Comando continuar pedido
         if (lowerMessage.includes('continuar pedido') || lowerMessage.includes('continuar')) {
           setTimeout(() => {
-            addMessage('😋 Que ótimo! O que mais você gostaria de adicionar ao pedido? Posso te mostrar o cardápio novamente se quiser!', 'bot');
+            addMessage('😋 Ótimo! O que mais você gostaria de adicionar? Posso te mostrar o cardápio novamente se quiser!', 'bot');
           }, 100);
           return { ...currentState, stage: 'ordering' };
         }
 
-        // Verificar se é uma consulta de preço com contexto
-        if ((lowerMessage.includes('preço') || lowerMessage.includes('quanto custa') || lowerMessage.includes('valor')) && 
-            !findMenuItem(userMessage) && conversationContext.lastQueriedItem) {
-          const item = conversationContext.lastQueriedItem;
-          let priceText = `💰 A ${item.name} custa R$ ${item.price.toFixed(2)}`;
-          if (item.priceSmall) {
-            priceText += ` (tamanho grande) ou R$ ${item.priceSmall.toFixed(2)} (broto)`;
+        // Consultas sobre ingredientes - MELHORADA
+        if (lowerMessage.includes('ingrediente') || lowerMessage.includes('tem o que') || 
+            lowerMessage.includes('feita com') || lowerMessage.includes('oque vai') || 
+            lowerMessage.includes('o que vai')) {
+          const item = findMenuItem(userMessage);
+          if (item) {
+            let ingredientsText;
+            if (item.ingredients.length > 0) {
+              const ingredientsList = item.ingredients.join(', ');
+              ingredientsText = `🍅 A ${getItemIcon(item)} ${item.name} leva: ${ingredientsList}! 
+
+Uma combinação perfeita que vai te deixar com água na boca! 😋 
+
+Gostaria de adicionar ao pedido? É só falar "quero"!`;
+            } else {
+              ingredientsText = `${getItemIcon(item)} A ${item.name} já vem prontinha para você! 🥤
+
+Que tal adicionar ao pedido? Fala "quero" que eu coloco! 😊`;
+            }
+            
+            setTimeout(() => {
+              addMessage(ingredientsText, 'bot');
+            }, 100);
+            
+            setConversationContext({ lastQueriedItem: item, lastAction: 'ingredients', addressField: null });
+          } else {
+            setTimeout(() => {
+              addMessage('🤔 Hmm, não consegui identificar qual item você está perguntando! Pode me falar o nome da pizza de novo? Ou digite "cardápio" para ver todas as opções! 😊', 'bot');
+            }, 100);
           }
-          priceText += '! Uma delícia que vale cada centavo! 😋';
-          
-          setTimeout(() => {
-            addMessage(priceText, 'bot');
-          }, 100);
-          
-          setConversationContext(prev => ({ ...prev, lastAction: 'price' }));
           return currentState;
         }
 
-        // Verificar se é uma consulta de ingredientes com contexto
-        if ((lowerMessage.includes('ingrediente') || lowerMessage.includes('tem o que') || lowerMessage.includes('feita com')) && 
-            !findMenuItem(userMessage) && conversationContext.lastQueriedItem) {
-          const item = conversationContext.lastQueriedItem;
-          let ingredientsText;
-          if (item.ingredients.length > 0) {
-            const ingredientsList = item.ingredients.join(', ');
-            ingredientsText = `🍅 A ${item.name} é feita com: ${ingredientsList}. Fica uma delícia! 😍`;
+        // Consultas sobre preço - MELHORADA
+        if (lowerMessage.includes('preço') || lowerMessage.includes('quanto custa') || 
+            lowerMessage.includes('valor') || lowerMessage.includes('quanto')) {
+          const item = findMenuItem(userMessage);
+          if (item) {
+            let priceText = `💰 A ${getItemIcon(item)} ${item.name} sai por R$ ${item.price.toFixed(2)}`;
+            if (item.priceSmall) {
+              priceText += ` (tamanho grande) ou R$ ${item.priceSmall.toFixed(2)} (broto)`;
+            }
+            priceText += `! 
+
+Um preço justo por uma pizza deliciosa! 😋 Gostaria de adicionar ao pedido?`;
+            
+            setTimeout(() => {
+              addMessage(priceText, 'bot');
+            }, 100);
+            
+            setConversationContext({ lastQueriedItem: item, lastAction: 'price', addressField: null });
           } else {
-            ingredientsText = `A ${item.name} está pronta para você! 🥤`;
+            setTimeout(() => {
+              addMessage('🤔 Não consegui identificar qual item você quer saber o preço! Pode repetir o nome? Ou digite "cardápio" para ver tudo com os preços! 💰', 'bot');
+            }, 100);
+          }
+          return currentState;
+        }
+
+        // Busca direta por item - MUITO MELHORADA
+        const directItem = findMenuItem(userMessage);
+        if (directItem && !lowerMessage.includes('cardápio') && !lowerMessage.includes('menu')) {
+          let itemText = `${getItemIcon(directItem)} Ótima escolha! A ${directItem.name} é uma das nossas queridinhas! 😍`;
+          
+          if (directItem.ingredients.length > 0) {
+            const ingredientsList = directItem.ingredients.join(', ');
+            itemText += `\n\n🍅 Vem com: ${ingredientsList}`;
           }
           
+          itemText += `\n💰 Preço: R$ ${directItem.price.toFixed(2)}`;
+          if (directItem.priceSmall) {
+            itemText += ` (grande) ou R$ ${directItem.priceSmall.toFixed(2)} (broto)`;
+          }
+          
+          itemText += '\n\n😋 Quer colocar no pedido? É só falar "quero"!';
+          
           setTimeout(() => {
-            addMessage(ingredientsText, 'bot');
+            addMessage(itemText, 'bot');
           }, 100);
           
-          setConversationContext(prev => ({ ...prev, lastAction: 'ingredients' }));
+          setConversationContext({ lastQueriedItem: directItem, lastAction: null, addressField: null });
           return currentState;
         }
 
         // Verificar se quer adicionar o item do contexto
-        if ((lowerMessage.includes('quero') || lowerMessage.includes('vou querer') || lowerMessage.includes('adicionar') || 
-             lowerMessage.includes('pedir')) && conversationContext.lastQueriedItem && !findMenuItem(userMessage)) {
+        if ((lowerMessage.includes('quero') || lowerMessage.includes('vou querer') || 
+             lowerMessage.includes('adicionar') || lowerMessage.includes('pedir')) && 
+             conversationContext.lastQueriedItem && !findMenuItem(userMessage)) {
           const item = conversationContext.lastQueriedItem;
           const newTotal = currentState.currentOrder.total + item.price;
           
           setTimeout(() => {
-            addMessage(`🎉 Perfeito! Adicionei a ${getItemIcon(item)} ${item.name} ao seu pedido! 
+            addMessage(`🎉 Perfeito! Coloquei a ${getItemIcon(item)} ${item.name} no seu pedido! 
 
 💰 **Total atual:** R$ ${newTotal.toFixed(2)}
 
-Gostaria de adicionar mais alguma coisa? Digite "continuar pedido" para adicionar mais itens, ou "finalizar" para prosseguir com o endereço de entrega! 😊`, 'bot');
+Quer adicionar mais alguma coisa? Fala "continuar pedido" ou "finalizar" para prosseguir! 😊`, 'bot');
           }, 100);
 
           return {
@@ -494,138 +472,60 @@ Gostaria de adicionar mais alguma coisa? Digite "continuar pedido" para adiciona
           };
         }
 
-        // Consultas sobre preço com item específico
-        if (lowerMessage.includes('preço') || lowerMessage.includes('quanto custa') || lowerMessage.includes('valor')) {
-          const item = findMenuItem(userMessage);
-          if (item) {
-            let priceText = `💰 A ${getItemIcon(item)} ${item.name} custa R$ ${item.price.toFixed(2)}`;
-            if (item.priceSmall) {
-              priceText += ` (tamanho grande) ou R$ ${item.priceSmall.toFixed(2)} (broto)`;
-            }
-            priceText += '! Uma delícia que vale cada centavo! 😋';
-            
-            setTimeout(() => {
-              addMessage(priceText, 'bot');
-            }, 100);
-            
-            setConversationContext({ lastQueriedItem: item, lastAction: 'price', addressField: null });
-          } else {
-            setTimeout(() => {
-              addMessage('🤔 Não encontrei esse item no nosso cardápio. Que tal dar uma olhada em nossas opções? Digite "cardápio" para ver tudo!', 'bot');
-            }, 100);
-          }
-          return currentState;
-        }
-
-        // Consultas sobre ingredientes com item específico
-        if (lowerMessage.includes('ingrediente') || lowerMessage.includes('tem o que') || lowerMessage.includes('feita com')) {
-          const item = findMenuItem(userMessage);
-          if (item) {
-            let ingredientsText;
-            if (item.ingredients.length > 0) {
-              const ingredientsList = item.ingredients.join(', ');
-              ingredientsText = `🍅 A ${getItemIcon(item)} ${item.name} é feita com: ${ingredientsList}. Fica uma delícia! 😍`;
-            } else {
-              ingredientsText = `A ${getItemIcon(item)} ${item.name} está pronta para você! 🥤`;
-            }
-            
-            setTimeout(() => {
-              addMessage(ingredientsText, 'bot');
-            }, 100);
-            
-            setConversationContext({ lastQueriedItem: item, lastAction: 'ingredients', addressField: null });
-          } else {
-            setTimeout(() => {
-              addMessage('🤔 Não encontrei esse item. Posso te mostrar nosso cardápio completo! Digite "cardápio" para ver todas as opções.', 'bot');
-            }, 100);
-          }
-          return currentState;
-        }
-
-        // Busca direta por item (quando usuário digita apenas o nome da pizza)
-        const directItem = findMenuItem(userMessage);
-        if (directItem && !lowerMessage.includes('cardápio') && !lowerMessage.includes('menu')) {
-          let itemText = `${getItemIcon(directItem)} Ótima escolha! A ${directItem.name} é uma das nossas especialidades!`;
+        if (lowerMessage.includes('cardápio') || lowerMessage.includes('menu') || lowerMessage.includes('opções')) {
+          const pizzas = menu.filter(item => item.category === 'pizza' && item.available);
+          const bebidas = menu.filter(item => item.category === 'bebida' && item.available);
+          const bordas = menu.filter(item => item.category === 'entrada' && item.available);
+          const sobremesas = menu.filter(item => item.category === 'sobremesa' && item.available);
           
-          if (directItem.ingredients.length > 0) {
-            const ingredientsList = directItem.ingredients.join(', ');
-            itemText += `\n\n🍅 Ingredientes: ${ingredientsList}`;
+          let menuText = '📋 Aqui está nosso delicioso cardápio da Pizzaria Frajola! 🍕\n\n🍕 PIZZAS CLÁSSICAS & ESPECIAIS:\n';
+          pizzas.slice(0, 10).forEach(pizza => {
+            menuText += `${getItemIcon(pizza)} ${pizza.name} - R$ ${pizza.price.toFixed(2)}\n`;
+          });
+          
+          if (bordas.length > 0) {
+            menuText += '\n🥖 BORDAS RECHEADAS:\n';
+            bordas.forEach(borda => {
+              menuText += `${getItemIcon(borda)} ${borda.name} - R$ ${borda.price.toFixed(2)}\n`;
+            });
           }
           
-          itemText += `\n💰 Preço: R$ ${directItem.price.toFixed(2)}`;
-          if (directItem.priceSmall) {
-            itemText += ` (grande) ou R$ ${directItem.priceSmall.toFixed(2)} (broto)`;
+          if (bebidas.length > 0) {
+            menuText += '\n🥤 BEBIDAS:\n';
+            bebidas.forEach(bebida => {
+              menuText += `${getItemIcon(bebida)} ${bebida.name} - R$ ${bebida.price.toFixed(2)}\n`;
+            });
           }
           
-          itemText += '\n\n😋 Gostaria de adicionar ao pedido? Digite "quero" ou "vou querer"!';
+          menuText += '\n💡 Dica: Pergunte "o que vai na pizza de calabresa?" ou "quanto custa a margherita?" 😊\n📱 Delivery: (17) - @pizzariamassamia';
           
           setTimeout(() => {
-            addMessage(itemText, 'bot');
+            addMessage(menuText, 'bot');
           }, 100);
           
-          setConversationContext({ lastQueriedItem: directItem, lastAction: null, addressField: null });
+          setConversationContext({ lastQueriedItem: null, lastAction: 'menu', addressField: null });
           return currentState;
         }
 
-        // Se for relacionado à pizzaria, usar lógica original
-        if (chatService.isPizzariaRelated(userMessage)) {
+        // Fazer pedido
+        if (lowerMessage.includes('pedido') || lowerMessage.includes('quero') || lowerMessage.includes('pedir')) {
+          setTimeout(() => {
+            addMessage('🎉 Que bom! Vamos fazer seu pedido! Me diga qual pizza você quer, posso personalizar removendo ingredientes se preferir! E não esqueça das nossas bordas recheadas! 😋', 'bot');
+          }, 100);
           
-          if (lowerMessage.includes('cardápio') || lowerMessage.includes('menu') || lowerMessage.includes('opções')) {
-            const pizzas = menu.filter(item => item.category === 'pizza' && item.available);
-            const bebidas = menu.filter(item => item.category === 'bebida' && item.available);
-            const bordas = menu.filter(item => item.category === 'entrada' && item.available);
-            const sobremesas = menu.filter(item => item.category === 'sobremesa' && item.available);
-            
-            let menuText = '📋 Aqui está nosso delicioso cardápio da Pizzaria Frajola! 🍕\n\n🍕 PIZZAS CLÁSSICAS & ESPECIAIS:\n';
-            pizzas.slice(0, 10).forEach(pizza => {
-              menuText += `${getItemIcon(pizza)} ${pizza.name} - R$ ${pizza.price.toFixed(2)}\n`;
-            });
-            
-            if (bordas.length > 0) {
-              menuText += '\n🥖 BORDAS RECHEADAS:\n';
-              bordas.forEach(borda => {
-                menuText += `${getItemIcon(borda)} ${borda.name} - R$ ${borda.price.toFixed(2)}\n`;
-              });
-            }
-            
-            if (bebidas.length > 0) {
-              menuText += '\n🥤 BEBIDAS:\n';
-              bebidas.forEach(bebida => {
-                menuText += `${getItemIcon(bebida)} ${bebida.name} - R$ ${bebida.price.toFixed(2)}\n`;
-              });
-            }
-            
-            menuText += '\n💡 Dica: Pergunte sobre ingredientes ou preços de qualquer item! O que te chama atenção? 😊\n📱 Também temos delivery! (17) - @pizzariamassamia';
-            
-            setTimeout(() => {
-              addMessage(menuText, 'bot');
-            }, 100);
-            
-            setConversationContext({ lastQueriedItem: null, lastAction: 'menu', addressField: null });
-            return currentState;
-          }
-
-          // Fazer pedido
-          if (lowerMessage.includes('pedido') || lowerMessage.includes('quero') || lowerMessage.includes('pedir')) {
-            setTimeout(() => {
-              addMessage('🎉 Que ótimo! Vamos fazer seu pedido! Me diga qual pizza e bebidas você gostaria. Posso também personalizar removendo ingredientes se preferir! E não esqueça das nossas deliciosas bordas recheadas! 😋', 'bot');
-            }, 100);
-            
-            return { ...currentState, stage: 'ordering' };
-          }
+          return { ...currentState, stage: 'ordering' };
         }
       }
 
-      // Usar ChatGPT para conversas casuais ou perguntas gerais
+      // Usar ChatGPT para conversas casuais
       if (shouldUseAI) {
         const recentMessages = currentState.messages.slice(-5).map(msg => msg.text);
         const context = chatService.createContextForOpenAI(recentMessages);
         
         callOpenAI(userMessage, context).then(aiResponse => {
-          // Se OpenAI retornou erro de quota, usar resposta padrão
           if (aiResponse.includes('problemas técnicos') || aiResponse.includes('quota')) {
             if (chatService.isCasualConversation(userMessage)) {
-              addMessage('😊 Olá! Eu sou a Frajola da Pizzaria! Como posso te ajudar hoje? Posso mostrar nosso cardápio, ajudar com pedidos ou tirar suas dúvidas sobre nossas deliciosas pizzas! 🍕', 'bot');
+              addMessage('😊 Oi! Eu sou a Frajola da Pizzaria! Como posso te ajudar hoje? Posso mostrar nosso cardápio, ajudar com pedidos ou tirar suas dúvidas sobre nossas deliciosas pizzas! 🍕', 'bot');
             } else {
               addMessage('😊 Desculpe, não entendi muito bem! Mas posso te ajudar com:\n\n• Ver o cardápio completo\n• Consultar preços e ingredientes\n• Fazer um pedido\n• Falar com um atendente humano\n\nO que você gostaria de fazer? 🍕', 'bot');
             }
@@ -633,16 +533,15 @@ Gostaria de adicionar mais alguma coisa? Digite "continuar pedido" para adiciona
             addMessage(aiResponse, 'bot');
           }
         }).catch(() => {
-          // Em caso de erro de rede
-          addMessage('😊 Olá! Sou a Frajola da Pizzaria! Como posso te ajudar hoje? Digite "cardápio" para ver nossas deliciosas opções! 🍕', 'bot');
+          addMessage('😊 Oi! Sou a Frajola da Pizzaria! Como posso te ajudar hoje? Digite "cardápio" para ver nossas deliciosas opções! 🍕', 'bot');
         });
         
         return currentState;
       }
 
-      // Fallback
+      // Fallback melhorado
       setTimeout(() => {
-        addMessage('😊 Desculpe, não entendi muito bem! Posso te ajudar com:\n\n• Ver o cardápio completo\n• Consultar preços e ingredientes\n• Fazer um pedido\n• Falar com um atendente humano\n\nO que você gostaria de fazer? 🍕', 'bot');
+        addMessage('😊 Ops! Não entendi direito! Mas posso te ajudar com:\n\n• "cardápio" - ver todas as pizzas\n• "o que vai na pizza de calabresa?" - ingredientes\n• "quanto custa a margherita?" - preços\n• "quero fazer um pedido" - começar pedido\n• "humano" - falar com atendente\n\nO que você gostaria? 🍕', 'bot');
       }, 100);
       
       return currentState;
