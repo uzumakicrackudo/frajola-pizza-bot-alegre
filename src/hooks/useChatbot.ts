@@ -83,23 +83,22 @@ export const useChatbot = (menu: MenuItem[], estimatedTime: number) => {
       return null;
     }
     
-    // Palavras que NÃO são itens do menu (expandida)
+    // Palavras que NÃO são itens do menu (reduzida - apenas cumprimentos e palavras muito básicas)
     const stopWords = [
       'ola', 'olá', 'oi', 'e ai', 'eai', 'bom dia', 'boa tarde', 'boa noite',
       'obrigado', 'obrigada', 'valeu', 'tchau', 'ate logo', 'até logo',
       'sim', 'nao', 'não', 'ok', 'certo', 'beleza', 'legal', 'show',
-      'quanto', 'como', 'onde', 'quando', 'porque', 'por que', 'que',
       'cardapio', 'menu', 'pedido', 'pedir', 'quero', 'gostaria', 
-      'pode', 'consegue', 'ajuda', 'ajudar', 'oque', 'o que',
-      'vai', 'tem', 'ingrediente', 'ingredientes', 'feita', 'pizza', 'de',
-      'preco', 'preço', 'valor', 'custa', 'dessa', 'dela', 'dele', 'essa',
-      'borda', 'refrigerante'
+      'pode', 'consegue', 'ajuda', 'ajudar'
     ];
     
-    // Se for apenas uma palavra comum, não buscar
+    // Se for apenas uma palavra comum, não buscar (lógica mais permissiva)
     const queryWords = normalizedQuery.split(' ').filter(word => word.length > 2);
-    if (queryWords.every(word => stopWords.includes(word))) {
-      console.log('❌ Apenas palavras comuns detectadas');
+    const relevantWords = queryWords.filter(word => !stopWords.includes(word));
+    
+    // Se não há palavras relevantes, não buscar
+    if (relevantWords.length === 0) {
+      console.log('❌ Nenhuma palavra relevante detectada');
       return null;
     }
     
